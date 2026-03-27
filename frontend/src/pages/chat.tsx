@@ -1,190 +1,333 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { Layout } from '@/components/Layout';
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuthSafe } from '@/hooks/useAuthSafe';
 import { chatAPI } from '@/services/api';
-import { Send, Loader, MessageCircle, AlertCircle } from 'lucide-react';
+import ProjectSidebar, { Project } from '@/components/ProjectSidebar';
+import ProjectContextPanel, { CaseDocument, WebSource, DepthMode } from '@/components/ProjectContextPanel';
+import ConversationList, { Conversation } from '@/components/ConversationList';
+import ChatWindow, { Message } from '@/components/ChatWindow';
+import ChatInput from '@/components/ChatInput';
+import DepthSlider from '@/components/DepthSlider';
 
-interface Message {
-  role: 'user' | 'assistant';
-  content: string;
+// ── Types ──────────────────────────────────────────────────────────────────
+interface ProjectData {
+  id: string;
+  name: string;
+  documents: CaseDocument[];
+  sources: WebSource[];
+  depth: DepthMode;
+  conversations: Conversation[];
 }
 
+type ProjectStore = Record<string, ProjectData>;
+
+// ── Stub data ──────────────────────────────────────────────────────────────
+const STUB_PROJECTS: ProjectStore = {
+  'p1': {
+    id: 'p1', name: 'Case 1 — Housing Benefit', depth: 'balanced',
+    documents: [{ id: 'd1', name: 'Housing Act 1996.pdf' }],
+    sources: [{ id: 's1', title: 'GOV.UK Housing Benefit', url: 'https://www.gov.uk/housing-benefit' }],
+    conversations: [{ id: 'c1', title: 'Eligibility query' }],
+  },
+  'p2': {
+    id: 'p2', name: 'Case 2 — Universal Credit', depth: 'quick',
+    documents: [],
+    sources: [],
+    conversations: [],
+  },
+};
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const newId = () => `${Date.now()}`;
+
+const summariseTitle = (text: string) =>
+  text.trim().split(/\s+/).slice(0, 3).join(' ');
+
+// ── Page ───────────────────────────────────────────────────────────────────
 export default function ChatPage() {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [inputValue, setInputValue] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const { isLoggedIn } = useAuthSafe();
   const router = useRouter();
 
-  // Redirect if not logged in
+  const [projects, setProjects] = useState<ProjectStore>(STUB_PROJECTS);
+  const [projectList, setProjectList] = useState<Project[]>(
+    Object.values(STUB_PROJECTS).map(({ id, name }) => ({ id, name })),
+  );
+  const [activeProjectId, setActiveProjectId] = useState<string | null>('p1');
+  const [activeConvId, setActiveConvId] = useState<string | null>(null);
+  const [messagesByConv, setMessagesByConv] = useState<Record<string, Message[]>>({});
+  const [loading, setLoading] = useState(false);
+  const [inputVisible, setInputVisible] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(true);
+
   useEffect(() => {
-    if (!isLoggedIn) {
-      router.push('/login');
-    }
+    if (!isLoggedIn) router.push('/login');
   }, [isLoggedIn, router]);
 
-  // Auto-scroll to bottom when new messages arrive
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
 
-  // Initialize session
-  useEffect(() => {
-    if (isLoggedIn) {
-      // Generate a simple session ID if not exists
-      const id = `session_${Date.now()}`;
-      setSessionId(id);
+  const activeProject = activeProjectId ? projects[activeProjectId] : null;
+  const activeMessages: Message[] = messagesByConv[activeConvId ?? ''] ?? [];
 
-      // Add welcome message
-      setMessages([
-        {
-          role: 'assistant',
-          content:
-            'Hello! I am the Citizens Advice AI Assistant. I can help you find information from the knowledge base. How can I assist you today?',
-        },
-      ]);
+  // ── Project actions ──────────────────────────────────────────────────────
+  const handleNewProject = (name: string) => {
+    const id = newId();
+    const newProject: ProjectData = {
+      id, name, depth: 'balanced',
+      documents: [], sources: [], conversations: [],
+    };
+    setProjects((p) => ({ ...p, [id]: newProject }));
+    setProjectList((p) => [{ id, name }, ...p]);
+    setActiveProjectId(id);
+    setActiveConvId(null);
+  };
+
+  const handleDeleteProject = (id: string) => {
+    setProjects((p) => { const u = { ...p }; delete u[id]; return u; });
+    setProjectList((p) => p.filter((x) => x.id !== id));
+    if (activeProjectId === id) { setActiveProjectId(null); setActiveConvId(null); }
+  };
+
+  const handleRenameProject = (id: string, name: string) => {
+    setProjects((p) => ({ ...p, [id]: { ...p[id], name } }));
+    setProjectList((p) => p.map((x) => (x.id === id ? { ...x, name } : x)));
+  };
+
+  const updateProject = (id: string, patch: Partial<ProjectData>) =>
+    setProjects((p) => ({ ...p, [id]: { ...p[id], ...patch } }));
+
+  // ── Document actions ─────────────────────────────────────────────────────
+  const handleAddDocument = (file: File) => {
+    if (!activeProjectId) return;
+    const doc: CaseDocument = { id: newId(), name: file.name };
+    updateProject(activeProjectId, {
+      documents: [...(activeProject?.documents ?? []), doc],
+    });
+  };
+
+  const handleDeleteDocument = (docId: string) => {
+    if (!activeProjectId) return;
+    updateProject(activeProjectId, {
+      documents: activeProject?.documents.filter((d) => d.id !== docId) ?? [],
+    });
+  };
+
+  // ── Source actions ───────────────────────────────────────────────────────
+  const handleAddSource = (title: string, url: string) => {
+    if (!activeProjectId) return;
+    const src: WebSource = { id: newId(), title, url };
+    updateProject(activeProjectId, {
+      sources: [...(activeProject?.sources ?? []), src],
+    });
+  };
+
+  const handleDeleteSource = (srcId: string) => {
+    if (!activeProjectId) return;
+    updateProject(activeProjectId, {
+      sources: activeProject?.sources.filter((s) => s.id !== srcId) ?? [],
+    });
+  };
+
+  // ── Conversation actions ─────────────────────────────────────────────────
+  const handleNewConversation = () => {
+    if (!activeProjectId) return;
+    const id = newId();
+    const conv: Conversation = { id, title: 'New Conversation' };
+    updateProject(activeProjectId, {
+      conversations: [...(activeProject?.conversations ?? []), conv],
+    });
+    setActiveConvId(id);
+  };
+
+  const handleDeleteConversation = (convId: string) => {
+    if (!activeProjectId) return;
+    updateProject(activeProjectId, {
+      conversations: activeProject?.conversations.filter((c) => c.id !== convId) ?? [],
+    });
+    if (activeConvId === convId) setActiveConvId(null);
+  };
+
+  const handleRenameConversation = (convId: string, title: string) => {
+    if (!activeProjectId) return;
+    updateProject(activeProjectId, {
+      conversations: activeProject!.conversations.map((c) =>
+        c.id === convId ? { ...c, title } : c,
+      ),
+    });
+  };
+
+  // ── Chat actions ─────────────────────────────────────────────────────────
+  const handleSend = async (text: string) => {
+    if (!activeConvId || !activeProjectId) return;
+
+    const userMsg: Message = { role: 'user', content: text };
+    setMessagesByConv((prev) => ({
+      ...prev,
+      [activeConvId]: [...(prev[activeConvId] ?? []), userMsg],
+    }));
+
+    // Auto-title the conversation from first message
+    const conv = activeProject?.conversations.find((c) => c.id === activeConvId);
+    if (conv?.title === 'New Conversation') {
+      updateProject(activeProjectId, {
+        conversations: activeProject!.conversations.map((c) =>
+          c.id === activeConvId ? { ...c, title: summariseTitle(text) } : c,
+        ),
+      });
     }
-  }, [isLoggedIn]);
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputValue.trim() || !sessionId) return;
-
-    // Add user message
-    const userMessage = inputValue.trim();
-    setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
-    setInputValue('');
-    setError('');
-
+    setLoading(true);
     try {
-      setLoading(true);
-
-      const response = await chatAPI.sendMessage(sessionId, userMessage, 'standard');
-
-      // Add assistant response
-      setMessages((prev) => [
+      const response = await chatAPI.sendMessage(activeConvId, text, activeProject?.depth ?? 'balanced');
+      setMessagesByConv((prev) => ({
         ...prev,
-        {
-          role: 'assistant',
-          content: response.message?.content || 'No response received',
-        },
-      ]);
-    } catch (err: any) {
-      const message =
-        err.response?.data?.detail || 'Failed to send message. Please try again.';
-      setError(message);
-      console.error('Error sending message:', err);
-
-      // Add error message to chat
-      setMessages((prev) => [
+        [activeConvId]: [
+          ...(prev[activeConvId] ?? []),
+          { role: 'assistant', content: response.message?.content ?? 'No response received.' },
+        ],
+      }));
+    } catch {
+      setMessagesByConv((prev) => ({
         ...prev,
-        {
-          role: 'assistant',
-          content: `Error: ${message}`,
-        },
-      ]);
+        [activeConvId]: [
+          ...(prev[activeConvId] ?? []),
+          { role: 'assistant', content: 'Something went wrong. Please try again.' },
+        ],
+      }));
     } finally {
       setLoading(false);
     }
   };
 
-  if (!isLoggedIn) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
-  }
+  if (!isLoggedIn) return null;
 
   return (
-    <Layout>
-      <div className="max-w-4xl mx-auto h-screen flex flex-col">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-lg mb-4">
-          <div className="flex items-center gap-3">
-            <MessageCircle size={28} />
-            <div>
-              <h1 className="text-3xl font-bold">Citizens Advice AI Chat</h1>
-              <p className="text-blue-100">Get instant answers powered by AI</p>
-            </div>
+    <div className="flex h-screen bg-white dark:bg-gray-900 overflow-hidden">
+
+      {/* Col 1 — Projects sidebar */}
+      <ProjectSidebar
+        projects={projectList}
+        activeProjectId={activeProjectId}
+        onSelectProject={(id) => { setActiveProjectId(id); setActiveConvId(null); }}
+        onNewProject={handleNewProject}
+        onDeleteProject={handleDeleteProject}
+        onRenameProject={handleRenameProject}
+      />
+
+      {!activeProject ? (
+        /* No project selected */
+        <div className="flex-1 flex items-center justify-center text-center">
+          <div>
+            <p className="text-gray-400 text-lg font-medium">Select a case to get started</p>
+            <p className="text-gray-300 text-sm mt-1">or create a new one from the sidebar</p>
           </div>
         </div>
+      ) : (
+        <>
+          {/* Col 2 — Project context panel (collapsible) */}
+          <div className={`transition-[width] duration-300 overflow-hidden shrink-0 ${panelOpen ? 'w-72' : 'w-0'}`}>
+            <ProjectContextPanel
+              documents={activeProject.documents}
+              sources={activeProject.sources}
+              onAddDocument={handleAddDocument}
+              onDeleteDocument={handleDeleteDocument}
+              onAddSource={handleAddSource}
+              onDeleteSource={handleDeleteSource}
+            />
+          </div>
 
-        {/* Messages Container */}
-        <div className="flex-1 overflow-y-auto bg-white rounded-lg shadow-md p-6 mb-4 space-y-4">
-          {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <MessageCircle className="text-blue-300 mb-4" size={64} />
-              <p className="text-gray-600 text-lg">No messages yet</p>
-              <p className="text-gray-500">Start a conversation below</p>
-            </div>
+          {/* Panel toggle strip */}
+          <button
+            onClick={() => setPanelOpen((v) => !v)}
+            className="shrink-0 self-stretch w-5 flex items-center justify-center bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 border-r border-gray-200 dark:border-gray-700 transition"
+            title={panelOpen ? 'Hide panel' : 'Show panel'}
+          >
+            {panelOpen
+              ? <ChevronLeft size={13} className="text-gray-400" />
+              : <ChevronRight size={13} className="text-gray-400" />}
+          </button>
+
+          {/* Col 3 — Conversations list or active chat */}
+          {!activeConvId ? (
+            <ConversationList
+              projectName={activeProject.name}
+              conversations={activeProject.conversations}
+              onNewConversation={handleNewConversation}
+              onSelectConversation={setActiveConvId}
+              onDeleteConversation={handleDeleteConversation}
+              onRenameConversation={handleRenameConversation}
+            />
           ) : (
-            <>
-              {messages.map((message, index) => (
-                <div
-                  key={index}
-                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            <div className="flex flex-col flex-1 overflow-hidden bg-white dark:bg-gray-900">
+              {/* Top bar with back button */}
+              <div className="shrink-0 px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex items-center gap-3">
+                <button
+                  onClick={() => setActiveConvId(null)}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition"
                 >
-                  <div
-                    className={`max-w-xl px-4 py-3 rounded-lg ${
-                      message.role === 'user'
-                        ? 'bg-blue-600 text-white rounded-br-none'
-                        : 'bg-gray-100 text-gray-900 rounded-bl-none'
-                    }`}
-                  >
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                      {message.content}
-                    </p>
+                  <ArrowLeft size={18} />
+                </button>
+                <p className="text-sm font-medium text-gray-700 dark:text-white">
+                  {activeProject.conversations.find((c) => c.id === activeConvId)?.title ?? 'Conversation'}
+                </p>
+              </div>
+
+              {activeMessages.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center px-4 bg-white dark:bg-gray-900">
+                  <h2 className="text-2xl font-semibold text-gray-700 dark:text-white mb-2">How can I help you today?</h2>
+                  <p className="text-gray-400 text-sm mb-8">Ask me anything about Citizens Advice guidance.</p>
+                  <div className="w-full max-w-2xl">
+                    <ChatInput onSend={handleSend} loading={loading} />
+                    <div className="mt-4">
+                      <DepthSlider
+                        depth={activeProject.depth}
+                        onChange={(d) => updateProject(activeProjectId!, { depth: d })}
+                      />
+                    </div>
                   </div>
                 </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </>
-          )}
-        </div>
-
-        {/* Error Message */}
-        {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
-            <AlertCircle className="text-red-600 flex-shrink-0" size={20} />
-            <p className="text-red-700 text-sm">{error}</p>
-          </div>
-        )}
-
-        {/* Input Form */}
-        <form onSubmit={handleSendMessage} className="space-y-3">
-          <div className="flex gap-3">
-            <input
-              type="text"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              disabled={loading}
-              placeholder="Type your question here..."
-              className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition disabled:bg-gray-100"
-            />
-            <button
-              type="submit"
-              disabled={!inputValue.trim() || loading}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <Loader size={20} className="animate-spin" />
-                  Sending...
-                </>
               ) : (
                 <>
-                  <Send size={20} />
-                  Send
+                  {/* Chat window — flex-1 so it fills all space freed by the panel */}
+                  <ChatWindow
+                    messages={activeMessages}
+                    loading={loading}
+                  />
+
+                  {/* Bottom dock — always pinned to bottom */}
+                  <div className="shrink-0 bg-white dark:bg-gray-700 border-t border-gray-100 dark:border-gray-600">
+
+                    {/* Toggle button — always visible */}
+                    <div className="flex items-center justify-center py-1">
+                      <button
+                        onClick={() => setInputVisible((v) => !v)}
+                        className="text-xs text-gray-300 dark:text-gray-500 hover:text-gray-500 dark:hover:text-gray-300 transition px-3 py-0.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-600"
+                      >
+                        {inputVisible ? '▼ hide' : '▲ show'}
+                      </button>
+                    </div>
+
+                    {/* Collapsing panel */}
+                    <div
+                      className={`overflow-hidden transition-all duration-300 ease-in-out ${
+                        inputVisible ? 'max-h-64' : 'max-h-0'
+                      }`}
+                    >
+                      <ChatInput onSend={handleSend} loading={loading} />
+                      <div className="pb-2 dark:bg-gray-700">
+                        <DepthSlider
+                          depth={activeProject.depth}
+                          onChange={(d) => updateProject(activeProjectId!, { depth: d })}
+                        />
+                      </div>
+                    </div>
+
+                  </div>
                 </>
               )}
-            </button>
-          </div>
-          <p className="text-xs text-gray-500 text-center">
-            Responses are generated from the documents in your knowledge base
-          </p>
-        </form>
-      </div>
-    </Layout>
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }
