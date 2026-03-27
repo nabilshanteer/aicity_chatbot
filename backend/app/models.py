@@ -14,12 +14,14 @@ def new_uuid():
 class User(Base):
     __tablename__ = "users"
 
-    id         = Column(String, primary_key=True, default=new_uuid)
-    email      = Column(String, unique=True, nullable=False, index=True)
-    name       = Column(String)
-    google_id  = Column(String, unique=True)
-    role       = Column(String, default="advisor")  # advisor | admin | readonly
-    created_at = Column(DateTime, default=datetime.utcnow)
+    id              = Column(String, primary_key=True, default=new_uuid)
+    email           = Column(String, unique=True, nullable=False, index=True)
+    username        = Column(String, unique=True, nullable=True)
+    name            = Column(String)
+    hashed_password = Column(String, nullable=True)  # null for Google-only users
+    google_id       = Column(String, unique=True, nullable=True)
+    role            = Column(String, default="advisor")  # advisor | admin | readonly
+    created_at      = Column(DateTime, default=datetime.utcnow)
 
     chats = relationship("Chat", back_populates="user", cascade="all, delete")
 
