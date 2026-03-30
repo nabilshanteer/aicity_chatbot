@@ -11,13 +11,13 @@ app = FastAPI(title="Citizens Advice Chatbot API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS.split(","),
+    allow_origins=[origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
 )
 
-app.include_router(auth.router)
+app.include_router(auth.router, prefix="/api/auth")
 
 
 @app.get("/health")
