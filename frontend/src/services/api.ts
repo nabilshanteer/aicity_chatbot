@@ -22,6 +22,21 @@ export const chatAPI = {
     return { sessions: [] };
   },
 
+  generateTitle: async (message: string): Promise<string> => {
+    try {
+      const res = await fetch(`${API_BASE}/api/chat/title`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      return data.title;
+    } catch {
+      return message.trim().split(/\s+/).slice(0, 4).join(' ');
+    }
+  },
+
   sendMessage: async (
     _sessionId: string,
     _message: string,
@@ -46,6 +61,36 @@ export const documentsAPI = {
 
   deleteDocument: async (_documentName: string): Promise<void> => {
     throw new Error('Backend not connected. Document deletion is unavailable.');
+  },
+};
+
+export const notesAPI = {
+  suggest: async (
+    fragments: string[],
+    context: string,
+  ): Promise<{ suggestions: Array<{ fragment: string; suggestion: string | null; full: string }> }> => {
+    const res = await fetch(`${API_BASE}/api/notes/suggest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fragments, context }),
+    });
+    if (!res.ok) throw new Error('Failed to get suggestions');
+    return res.json();
+  },
+
+  get: async (chatId: string): Promise<{ notes: string[] }> => {
+    const res = await fetch(`${API_BASE}/api/notes/${chatId}`);
+    if (!res.ok) throw new Error('Failed to load notes');
+    return res.json();
+  },
+
+  save: async (chatId: string, notes: string[]): Promise<void> => {
+    const res = await fetch(`${API_BASE}/api/notes/${chatId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notes }),
+    });
+    if (!res.ok) throw new Error('Failed to save notes');
   },
 };
 
