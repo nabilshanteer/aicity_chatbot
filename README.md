@@ -37,22 +37,57 @@ citizen_chatbot/
 
 ## Quick Start
 
-### Backend
+### 1. Backend
+
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate      # Windows: venv\Scripts\activate
+venv\Scripts\activate         # Mac/Linux: source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env          # Fill in your API keys
-uvicorn app.main:app --reload --port 8000
 ```
 
-### Frontend
+Create a `.env` file in `backend/` (copy from `.env.example`) and fill in your keys.
+
+Then start the server:
+
+```bash
+uvicorn app.main:app --reload
+```
+
+API runs at http://localhost:8000 — interactive docs at http://localhost:8000/docs
+
+---
+
+### 2. Frontend
+
 ```bash
 cd frontend
 npm install
-cp .env.local.example .env.local
-npm run dev                   # Runs on http://localhost:3000
 ```
 
-API docs available at: http://localhost:8000/docs
+Create `frontend/.env.local` with the following:
+
+```env
+# Supabase (find these in Supabase dashboard → your project → Settings → API)
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+
+# Google OAuth (Google Cloud Console → APIs & Services → Credentials)
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+
+# NextAuth (generate secret with: openssl rand -base64 32)
+NEXTAUTH_SECRET=your-random-secret
+NEXTAUTH_URL=http://localhost:3000
+
+# Backend URL
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+```
+
+Then start the dev server:
+
+```bash
+npm run dev
+```
+
+App runs at http://localhost:3000
