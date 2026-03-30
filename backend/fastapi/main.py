@@ -3,11 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
 from pydantic import BaseModel
-import requests
-import faiss
-import json
-import numpy as np
-import uuid
 from openai import OpenAI
 from sentence_transformers import SentenceTransformer
 from contextlib import asynccontextmanager
@@ -60,34 +55,6 @@ def retrieve_chunks(query: str, top_k: int = 5) -> list[dict]:
     return result.data or []
 
 
-def generate_ai_response(user_query: str, retrieved_chunks: list[dict], history: list[dict]) -> str:
-    context = "\n\n".join([doc["text"] for doc in retrieved_chunks])
-
-    history_str = ""
-    for entry in history:
-        speaker = "User" if entry["role"] == "advisor" else "AI"
-        history_str += f"{speaker}: {entry['content']}\n"
-
-    prompt = f"""You are a professional advisor for Citizens Advice.
-Use the following context and conversation history to answer the user's question.
-
-History:
-{history_str}
-
-Context:
-{context}
-
-Question: {user_query}
-Helpful Answer:"""
-
-    try:
-        response = requests.post(
-            "http://localhost:11434/api/generate",
-            json={"model": "llama3.2:3b", "prompt": prompt, "stream": False}
-        )
-        return response.json().get("response", "Error generating response.")
-    except Exception:
-        return "Local AI (Ollama) is not responding. Is it running?"
 # --- HELPER: Talk to Grok ---
 def generate_ai_response(user_query, retrieved_chunks, history, case_summary=None):
     # Combine retrieved text for context
@@ -177,9 +144,10 @@ async def start_case():
 
 @app.post("/api/cases/{case_id}/query")
 async def ask_question(case_id: str, request: QueryRequest):
-    case_check = supabase.table("cases").select("id").eq("id", case_id).execute()
-    if not case_check.data:
+    case_res = supabase.table("cases").select("id", "summary").eq("id", case_id).execute()
+    if not case_res.data:
         raise HTTPException(status_code=404, detail="Case not found in Supabase database.")
+    case_summary = case_res.data[0].get("summary")
 
     # Retrieve relevant chunks from pgvector
     retrieved = retrieve_chunks(request.query)
@@ -195,7 +163,7 @@ async def ask_question(case_id: str, request: QueryRequest):
     )
     history = history_res.data[::-1]
 
-    answer = generate_ai_response(request.query, retrieved, history)
+    answer = generate_ai_response(request.query, retrieved, history, case_summary)
 
     supabase.table("messages").insert({
         "case_id": case_id,
