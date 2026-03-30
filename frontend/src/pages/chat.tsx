@@ -18,6 +18,7 @@ interface ProjectData {
   sources: WebSource[];
   depth: DepthMode;
   conversations: Conversation[];
+  notes: string[];
 }
 
 type ProjectStore = Record<string, ProjectData>;
@@ -29,20 +30,20 @@ const STUB_PROJECTS: ProjectStore = {
     documents: [{ id: 'd1', name: 'Housing Act 1996.pdf' }],
     sources: [{ id: 's1', title: 'GOV.UK Housing Benefit', url: 'https://www.gov.uk/housing-benefit' }],
     conversations: [{ id: 'c1', title: 'Eligibility query' }],
+    notes: [],
   },
   'p2': {
     id: 'p2', name: 'Case 2 — Universal Credit', depth: 'quick',
     documents: [],
     sources: [],
     conversations: [],
+    notes: [],
   },
 };
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const newId = () => `${Date.now()}`;
 
-const summariseTitle = (text: string) =>
-  text.trim().split(/\s+/).slice(0, 3).join(' ');
 
 // ── Page ───────────────────────────────────────────────────────────────────
 export default function ChatPage() {
@@ -73,7 +74,7 @@ export default function ChatPage() {
     const id = newId();
     const newProject: ProjectData = {
       id, name, depth: 'balanced',
-      documents: [], sources: [], conversations: [],
+      documents: [], sources: [], conversations: [], notes: [],
     };
     setProjects((p) => ({ ...p, [id]: newProject }));
     setProjectList((p) => [{ id, name }, ...p]);
@@ -109,6 +110,12 @@ export default function ChatPage() {
     updateProject(activeProjectId, {
       documents: activeProject?.documents.filter((d) => d.id !== docId) ?? [],
     });
+  };
+
+  // ── Notes actions ────────────────────────────────────────────────────────
+  const handleNotesChange = (notes: string[]) => {
+    if (!activeProjectId) return;
+    updateProject(activeProjectId, { notes });
   };
 
   // ── Source actions ───────────────────────────────────────────────────────
@@ -165,13 +172,17 @@ export default function ChatPage() {
       [activeConvId]: [...(prev[activeConvId] ?? []), userMsg],
     }));
 
-    // Auto-title the conversation from first message
+    // Auto-title the conversation from first message using Claude
     const conv = activeProject?.conversations.find((c) => c.id === activeConvId);
     if (conv?.title === 'New Conversation') {
-      updateProject(activeProjectId, {
-        conversations: activeProject!.conversations.map((c) =>
-          c.id === activeConvId ? { ...c, title: summariseTitle(text) } : c,
-        ),
+      const pid = activeProjectId;
+      const cid = activeConvId;
+      chatAPI.generateTitle(text).then((title) => {
+        updateProject(pid, {
+          conversations: projects[pid]?.conversations.map((c) =>
+            c.id === cid ? { ...c, title } : c,
+          ) ?? [],
+        });
       });
     }
 
@@ -232,6 +243,11 @@ export default function ChatPage() {
               onDeleteDocument={handleDeleteDocument}
               onAddSource={handleAddSource}
               onDeleteSource={handleDeleteSource}
+              chatId={activeProjectId}
+              projectName={activeProject.name}
+              conversationContext={activeMessages.slice(-6).map((m) => `${m.role}: ${m.content}`).join(' ')}
+              initialNotes={activeProject.notes}
+              onNotesChange={handleNotesChange}
             />
           </div>
 
