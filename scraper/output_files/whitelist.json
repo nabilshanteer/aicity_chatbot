@@ -1,22 +1,542 @@
 [
-    "https://www.citizensadvice.org.uk/housing/",
-    "https://www.citizensadvice.org.uk/housing/check-your-tenancy-type-if-you-rent-from-a-private-landlord/",
-    "https://www.citizensadvice.org.uk/housing/tenancy-agreements/",
-    "https://www.citizensadvice.org.uk/housing/eviction/getting-evicted/",
-    "https://www.citizensadvice.org.uk/housing/finding-somewhere-to-live/if-you-need-to-find-somewhere-to-live/",
-    "https://www.citizensadvice.org.uk/housing/homeless-help/homelessness/",
-    "https://www.citizensadvice.org.uk/housing/starting-to-rent-from-a-private-landlord/preparing-to-rent-from-a-private-landlord/",
-    "https://www.citizensadvice.org.uk/housing/starting-to-rent-from-a-private-landlord/information-landlords-ask-for-when-you-start-renting/",
-    "https://www.citizensadvice.org.uk/housing/starting-to-rent-from-a-private-landlord/how-much-it-costs-to-rent/",
-    "https://www.citizensadvice.org.uk/housing/starting-to-rent-from-a-private-landlord/using-a-guarantor/",
-    "https://www.citizensadvice.org.uk/housing/applying-for-council-housing-or-a-housing-association-home/getting-a-council-home/",
-    "https://www.citizensadvice.org.uk/housing/applying-for-council-housing-or-a-housing-association-home/challenging-the-councils-decision-about-your-housing-application/",
-    "https://www.citizensadvice.org.uk/housing/applying-for-council-housing-or-a-housing-association-home/refusing-an-unsuitable-council-home/",
-    "https://www.citizensadvice.org.uk/housing/deposits/check-your-landlord-has-protected-your-deposit/",
-    "https://www.citizensadvice.org.uk/housing/deposits/getting-your-tenancy-deposit-back/",
-    "https://www.citizensadvice.org.uk/housing/deposits/taking-your-landlord-to-court-if-they-havent-followed-the-deposit-rules/",
-    "https://www.citizensadvice.org.uk/housing/paying-rent/get-help-with-renting-costs/",
-    "https://www.citizensadvice.org.uk/housing/paying-rent/dealing-with-rent-arrears-housing/",
-    "https://www.citizensadvice.org.uk/housing/paying-rent/dealing-with-a-rent-increase/",
-    "https://www.citizensadvice.org.uk/housing/paying-rent/challenging-a-rent-increase/"
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cookie-preferences/?ReturnUrl=https%3A%2F%2Fwww.citizensadvice.org.uk%2Fbenefits",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/advisernet/login/?ReturnUrl=%2Fbenefits&redirect=false",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/work",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/debt-and-money",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/consumer",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/housing",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/family",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/law-and-courts",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/immigration",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/health",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/check-if-you-have-the-right-to-reside-for-benefits",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/getting-benefits-if-youve-recently-moved-to-the-UK",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/benefits-introduction/what-benefits-can-i-get",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/benefits-introduction/payment-of-benefits-and-tax-credits",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/benefits-introduction/how-volunteering-affects-your-benefits",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/benefits-introduction/problems-with-benefits-and-tax-credits",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/universal-credit/before-you-apply",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/universal-credit/moving-from-other-benefits",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/universal-credit/claiming",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/universal-credit/if-youre-sick-or-disabled",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/universal-credit/what-youll-need-to-do-on-universal-credit",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/universal-credit/on-universal-credit",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/universal-credit/problems-with-your-payment",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/universal-credit/sanctions",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/help-if-on-a-low-income/universal-credit-shortcut",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/help-if-on-a-low-income/housing-benefit",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/help-if-on-a-low-income/working-and-child-tax-credits",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/help-if-on-a-low-income/jobseekers-allowance-jsa",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/help-if-on-a-low-income/pension-credit",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/help-if-on-a-low-income/income-support",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/sick-or-disabled-people-and-carers/benefits-for-people-who-are-sick-or-disabled",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/sick-or-disabled-people-and-carers/employment-and-support-allowance",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/sick-or-disabled-people-and-carers/pip",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/sick-or-disabled-people-and-carers/disability-living-allowance",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/sick-or-disabled-people-and-carers/attendance-allowance",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/sick-or-disabled-people-and-carers/carers-allowance",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/sick-or-disabled-people-and-carers/if-youre-an-adult-on-disability-living-allowance",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/sick-or-disabled-people-and-carers/getting-benefits-if-you-got-ill-or-were-injured-at-work",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/sick-or-disabled-people-and-carers/help-for-disabled-travellers1",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/child-benefit/before-you-claim",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/child-benefit/help-with-your-child-benefit-claim",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/child-benefit/child-benefit-appeals",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/support-for-mortgage-interest-smi/deciding-if-you-should-apply-for-smi",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/support-for-mortgage-interest-smi/apply-for-smi",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/support-for-mortgage-interest-smi/check-if-a-change-affects-your-smi",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/bereavement-and-funeral-benefits/how-to-claim-bereavement-benefits",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/armed-forces-and-veterans/benefits-and-concessions-for-the-armed-forces-veterans-and-their-families",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/s",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/policy",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/advisernet/login/?ReturnUrl=%2Fcookie-preferences%2Fedit&redirect=false",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cookie-preferences/?ReturnUrl=https%3A%2F%2Fwww.citizensadvice.org.uk%2F",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/advisernet/login/?ReturnUrl=%2F&redirect=false",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/scotland",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/wales",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/immigration/how-changes-to-immigration-rules-might-affect-you",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/debt-and-money/cost-of-living/get-help-with-the-cost-of-living",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/consumer/energy/energy-supply/get-help-paying-your-bills/grants-and-benefits-to-help-you-pay-your-energy-bills",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/consumer/holiday-cancellations-and-compensation/if-your-flights-delayed-or-cancelled",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/housing/council-tax/check-if-you-can-pay-less-council-tax",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/debt-and-money/car-finance-claims-what-to-do-if-you-bought-a-car-on-finance",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/benefits/sick-or-disabled-people-and-carers/pip/before-claiming/extra-help-pip-entitles-you-to",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/amdanom-ni/gwybodaeth/sut-rydym-yn-defnyddio-cwcis",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/cookie-preferences/?ReturnUrl=https%3A%2F%2Fwww.citizensadvice.org.uk%2Fcymraeg%2FBudd-daliadau",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/amdanom-ni/rhodd",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/wales/benefits",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/advisernet/login/?ReturnUrl=%2Fcymraeg%2FBudd-daliadau&redirect=false",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Gwaith",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Dyled-ac-arian",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Defnyddwyr",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Tai",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Teulu",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Y-Gyfraith-a-Llysoedd",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/mewnfudo",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Iechyd",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/amdanom-ni",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/Edrych-i-weld-os-oes-gennych-hawl-i-breswylio-ar-gyfer-budd-daliadau",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/Cael-budd-daliadau-os-ydych-chi-wedi-symud-ir-DU-yn-ddiweddar",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/benefits-introduction/what-benefits-can-i-get1",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/benefits-introduction/payment-of-benefits-and-tax-credits",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/benefits-introduction/how-volunteering-affects-your-benefits",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/benefits-introduction/problems-with-benefits-and-tax-credits",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/credyd-cynhwysol/cyn-i-chi-wneud-cais-am-gredyd-cynhwysol",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/credyd-cynhwysol/moving-from-other-benefits",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/credyd-cynhwysol/hawlio-credyd-cynhwysol",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/credyd-cynhwysol/if-youre-sick-or-disabled",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/credyd-cynhwysol/beth-fydd-angen-i-chi-ei-wneud-ar-gredyd-cynhwysol",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/credyd-cynhwysol/pan-fyddwch-yn-cael-credyd-cynhwysol",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/credyd-cynhwysol/problemau-gydach-taliad",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/credyd-cynhwysol/os-ydych-chi-wedi-cael-eich-cosbi",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/help-if-on-a-low-income/universal-credit-shortcut",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/help-if-on-a-low-income/housing-benefit",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/help-if-on-a-low-income/working-and-child-tax-credits",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/help-if-on-a-low-income/jobseekers-allowance-jsa",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/help-if-on-a-low-income/pension-credit",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/help-if-on-a-low-income/income-support",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/sick-or-disabled-people-and-carers/pa-fudd-daliadau-iw-hawlio-os-ydych-chin-sal-neun-anabl",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/sick-or-disabled-people-and-carers/lwfans-cyflogaeth-a-chymorth-esa",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/sick-or-disabled-people-and-carers/pip",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/sick-or-disabled-people-and-carers/disability-living-allowance",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/sick-or-disabled-people-and-carers/attendance-allowance",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/sick-or-disabled-people-and-carers/lwfans-gofalwr",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/sick-or-disabled-people-and-carers/if-youre-an-adult-on-disability-living-allowance",
+    "source": "citizens_advice",
+    "category": "benefits"
+  },
+  {
+    "url": "https://www.citizensadvice.org.uk/cymraeg/Budd-daliadau/sick-or-disabled-people-and-carers/getting-benefits-if-you-got-ill-or-were-injured-at-work",
+    "source": "citizens_advice",
+    "category": "benefits"
+  }
 ]
