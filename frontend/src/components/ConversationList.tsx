@@ -4,6 +4,7 @@ import { Plus, MessageSquare, Trash2, Pencil } from 'lucide-react';
 export interface Conversation {
   id: string;
   title: string;
+  caseId?: string; // Backend case ID for RAG queries
 }
 
 interface Props {

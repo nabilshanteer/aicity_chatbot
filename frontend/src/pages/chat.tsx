@@ -29,7 +29,7 @@ const STUB_PROJECTS: ProjectStore = {
     id: 'p1', name: 'Case 1 — Housing Benefit', depth: 'balanced',
     documents: [{ id: 'd1', name: 'Housing Act 1996.pdf' }],
     sources: [{ id: 's1', title: 'GOV.UK Housing Benefit', url: 'https://www.gov.uk/housing-benefit' }],
-    conversations: [{ id: 'c1', title: 'Eligibility query' }],
+    conversations: [{ id: 'c1', title: 'Eligibility query', caseId: undefined }],
     notes: [],
   },
   'p2': {
@@ -135,10 +135,20 @@ export default function ChatPage() {
   };
 
   // ── Conversation actions ─────────────────────────────────────────────────
-  const handleNewConversation = () => {
+  const handleNewConversation = async () => {
     if (!activeProjectId) return;
     const id = newId();
-    const conv: Conversation = { id, title: 'New Conversation' };
+    
+    // Create a case in the backend RAG system
+    let caseId = id; // fallback to local ID if backend fails
+    try {
+      const { case_id } = await chatAPI.createCase();
+      caseId = case_id;
+    } catch (error) {
+      console.error('Failed to create backend case:', error);
+    }
+    
+    const conv: Conversation = { id, title: 'New Conversation', caseId };
     updateProject(activeProjectId, {
       conversations: [...(activeProject?.conversations ?? []), conv],
     });
@@ -188,7 +198,23 @@ export default function ChatPage() {
 
     setLoading(true);
     try {
-      const response = await chatAPI.sendMessage(activeConvId, text, activeProject?.depth ?? 'balanced');
+      let caseId = conv?.caseId;
+      
+      // If no case ID, create one before sending message
+      if (!caseId) {
+        console.log('Creating backend case for conversation...');
+        const { case_id } = await chatAPI.createCase();
+        caseId = case_id;
+        
+        // Update conversation with the new case ID
+        updateProject(activeProjectId, {
+          conversations: activeProject!.conversations.map((c) =>
+            c.id === activeConvId ? { ...c, caseId } : c,
+          ),
+        });
+      }
+      
+      const response = await chatAPI.sendMessage(caseId, text, activeProject?.depth ?? 'balanced');
       setMessagesByConv((prev) => ({
         ...prev,
         [activeConvId]: [

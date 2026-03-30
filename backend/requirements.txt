@@ -10,3 +10,6 @@ openai
 python-jose[cryptography]
 passlib[bcrypt]
 python-multipart
+faiss-cpu
+sentence-transformers
+supabase

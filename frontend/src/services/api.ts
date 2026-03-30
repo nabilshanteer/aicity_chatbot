@@ -1,9 +1,9 @@
 // ---------------------------------------------------------------------------
-// Stub API — backend not yet connected.
-// Replace these with real implementations when the new backend is ready.
+// RAG-powered Citizens Advice Chatbot API
+// Connected to FastAPI backend with Claude + FAISS vector search
 // ---------------------------------------------------------------------------
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8001';
 
 export const authAPI = {
   syncUser: async (email: string, name: string | null, googleId: string | null) => {
@@ -18,6 +18,26 @@ export const authAPI = {
 };
 
 export const chatAPI = {
+  createCase: async (): Promise<{ case_id: string }> => {
+    try {
+      const res = await fetch(`${API_BASE}/api/cases/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      
+      if (!res.ok) {
+        throw new Error(`Failed to create case: ${res.statusText}`);
+      }
+      
+      const data = await res.json();
+      return { case_id: data.case_id };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to create case: ${errorMessage}`);
+    }
+  },
+
   getSessions: async (): Promise<{ sessions: string[] }> => {
     return { sessions: [] };
   },
@@ -38,15 +58,33 @@ export const chatAPI = {
   },
 
   sendMessage: async (
-    _sessionId: string,
-    _message: string,
-    _depth: string = 'standard',
-  ): Promise<{ message: { content: string } }> => {
-    return {
-      message: {
-        content: 'The backend is not connected yet. Please check back soon.',
-      },
-    };
+    sessionId: string,
+    message: string,
+    depth: string = 'standard',
+  ): Promise<{ message: { content: string; sources?: string[] } }> => {
+    try {
+      const res = await fetch(`${API_BASE}/api/cases/${sessionId}/query`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: message, depth }),
+      });
+      
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Backend error: ${res.statusText}`);
+      }
+      
+      const data = await res.json();
+      return {
+        message: {
+          content: data.answer || 'No response from AI',
+          sources: data.sources || [],
+        },
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to send message: ${errorMessage}`);
+    }
   },
 };
 
