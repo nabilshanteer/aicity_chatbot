@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
 from pydantic import BaseModel
-from openai import OpenAI
+import google.genai as genai
 from sentence_transformers import SentenceTransformer
 from contextlib import asynccontextmanager
 from supabase import create_client, Client
@@ -55,25 +55,26 @@ def retrieve_chunks(query: str, top_k: int = 5) -> list[dict]:
     return result.data or []
 
 
-# --- HELPER: Talk to Grok ---
+# Gemini client
+gemini_client = genai.Client(
+    api_key=os.getenv("GEMINI_API_KEY"),
+    http_options={"api_version": "v1"},
+)
+
+
+# --- HELPER: Talk to Gemini ---
 def generate_ai_response(user_query, retrieved_chunks, history, case_summary=None):
-    # Combine retrieved text for context
     context = "\n\n".join([doc['text'] for doc in retrieved_chunks])
 
-    # Format the Supabase history to keep the AI on track
     history_str = ""
     for entry in history:
         speaker = "User" if entry['role'] == "advisor" else "AI"
         history_str += f"{speaker}: {entry['content']}\n"
 
-    # Include case summary if it exists
-    summary_context = ""
-    if case_summary:
-        summary_context = f"\n[Case Summary]\n{case_summary}\n"
+    summary_context = f"\n[Case Summary]\n{case_summary}\n" if case_summary else ""
 
-    system_prompt = "You are a professional advisor for Citizens Advice. Use the provided context and conversation history to answer the user's question accurately and helpfully."
-
-    user_message = f"""{summary_context}
+    prompt = f"""You are a professional advisor for Citizens Advice. Use the provided context and conversation history to answer the user's question accurately and helpfully.
+{summary_context}
 History:
 {history_str}
 
@@ -83,18 +84,14 @@ Context:
 Question: {user_query}"""
 
     try:
-        client = OpenAI(api_key=os.getenv("XAI_API_KEY"), base_url="https://api.x.ai/v1")
-        response = client.chat.completions.create(
-            model="grok-3",
-            max_tokens=1024,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_message}
-            ]
+        response = gemini_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
         )
-        return response.choices[0].message.content
+        return response.text
     except Exception as e:
         return f"Error generating response: {str(e)}"
+
 
 # --- HELPER: Generate Case Summary ---
 def generate_case_summary(messages, previous_summary=None):
@@ -102,13 +99,11 @@ def generate_case_summary(messages, previous_summary=None):
     Generate a compact summary of recent messages, optionally incorporating previous summary context.
     Called every 8 messages to compress conversation history.
     """
-    # Format the messages
     messages_str = ""
     for entry in messages:
         speaker = "User" if entry['role'] == "advisor" else "AI"
         messages_str += f"{speaker}: {entry['content']}\n"
 
-    # Build prompt with previous context if available
     previous_context = f"\n\nPrevious Summary for Context:\n{previous_summary}" if previous_summary else ""
 
     summarization_prompt = f"""Create a concise summary of this Citizens Advice case conversation.
@@ -119,13 +114,11 @@ Recent Conversation:
 {messages_str}"""
 
     try:
-        client = OpenAI(api_key=os.getenv("XAI_API_KEY"), base_url="https://api.x.ai/v1")
-        response = client.chat.completions.create(
-            model="grok-3",
-            max_tokens=256,
-            messages=[{"role": "user", "content": summarization_prompt}]
+        response = gemini_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=summarization_prompt,
         )
-        return response.choices[0].message.content.strip()
+        return response.text.strip()
     except Exception as e:
         return f"Unable to generate summary: {str(e)}"
 
