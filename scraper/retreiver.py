@@ -1,73 +1,70 @@
-import json
-import faiss
-import numpy as np
+"""
+retreiver.py
+------------
+Interactive CLI for testing retrieval from the Supabase pgvector database.
+Useful for verifying the embedder ran correctly and that search results
+look sensible before running the full backend.
+
+Usage:
+    python retreiver.py
+"""
+
+import os
+from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
+from supabase import create_client, Client
 
-def load_database(index_filename="output_files/faiss_index.bin", mapping_filename="output_files/chunk_mapping.json"):
-    """Loads the FAISS index and the text mapping file from disk."""
-    try:
-        index = faiss.read_index(index_filename)
-        with open(mapping_filename, 'r', encoding='utf-8') as f:
-            mapping = json.load(f)
-        return index, mapping
-    except Exception as e:
-        print(f"Error loading database: {e}")
-        return None, None
+load_dotenv()
 
-def search_database(query, index, mapping, model, top_k=3):
-    """
-    Converts the user's query to a vector, searches FAISS, and retrieves the text.
-    """
-    # 1. Convert the text query into a mathematical vector
-    query_vector = model.encode([query])
-    query_vector = np.array(query_vector).astype('float32')
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+MODEL_NAME   = "all-MiniLM-L6-v2"
 
-    # 2. Search FAISS for the closest matches
-    # distances = how close the match is mathematically (lower is better)
-    # indices = the ID numbers of the matching vectors
-    distances, indices = index.search(query_vector, top_k)
 
-    results = []
-    # 3. Look up the actual text and metadata for the returned IDs
-    for i, vector_id in enumerate(indices[0]):
-        # FAISS returns -1 if it can't find enough matches
-        if vector_id != -1 and vector_id < len(mapping): 
-            match = mapping[vector_id]
-            results.append({
-                "score": float(distances[0][i]),
-                "text": match['text'],
-                "source_url": match['source_url'],
-                "last_scraped": match['last_scraped']
-            })
-            
-    return results
+def search(query: str, supabase: Client, model: SentenceTransformer, top_k: int = 3) -> list[dict]:
+    embedding = model.encode(query).tolist()
+    result = supabase.rpc("match_chunks", {
+        "query_embedding": embedding,
+        "match_count": top_k,
+    }).execute()
+    return result.data or []
 
-# ==========================================
-# Run the Interactive Terminal Search
-# ==========================================
+
 if __name__ == "__main__":
-    print("Loading AI model and database... (This takes a few seconds)")
-    # We must use the exact same model we used to build the database
-    model = SentenceTransformer('all-MiniLM-L6-v2')
-    index, mapping = load_database()
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        print("Error: Missing SUPABASE_URL or SUPABASE_KEY in .env")
+        exit(1)
 
-    if index and mapping:
-        print(f"\n✅ Database loaded successfully! ({index.ntotal} chunks available)")
-        print("Type 'exit' to quit.")
-        
-        while True:
-            user_query = input("\nAsk a Citizens Advice question: ")
-            
-            if user_query.lower() == 'exit':
-                print("Closing search...")
-                break
-            
-            # Perform the search (Quick Mode: top 3 results)
-            results = search_database(user_query, index, mapping, model, top_k=3)
-            
-            print(f"\n--- Top {len(results)} Results ---")
-            for i, res in enumerate(results):
-                print(f"\nResult {i+1} (Distance Score: {res['score']:.2f})")
-                print(f"Source: {res['source_url']}")
-                print(f"Text: {res['text']}")
-                print("-" * 40)
+    print("Loading model and connecting to Supabase...")
+    model    = SentenceTransformer(MODEL_NAME)
+    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+    # Quick sanity check — count chunks in DB
+    count_res = supabase.table("chunks").select("id", count="exact").execute()
+    total     = count_res.count or 0
+    print(f"Connected. {total} chunks in database.")
+    print("Type 'exit' to quit.\n")
+
+    while True:
+        query = input("Ask a Citizens Advice question: ").strip()
+
+        if query.lower() == "exit":
+            print("Closing search...")
+            break
+
+        if not query:
+            continue
+
+        results = search(query, supabase, model, top_k=3)
+
+        if not results:
+            print("No results found.\n")
+            continue
+
+        print(f"\n--- Top {len(results)} Results ---")
+        for i, res in enumerate(results, start=1):
+            print(f"\nResult {i}  (distance: {res.get('distance', 'n/a'):.4f})")
+            print(f"Source  : {res.get('source_url', 'unknown')}")
+            print(f"Category: {res.get('category', 'unknown')}")
+            print(f"Text    : {res.get('text', '')[:300]}...")
+            print("-" * 40)
