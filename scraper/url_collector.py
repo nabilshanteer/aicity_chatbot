@@ -23,6 +23,8 @@ from datetime import datetime, timezone
 from urllib.parse import urljoin, urlparse
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
 
 # ---------------------------------------------------------------------------
@@ -70,12 +72,28 @@ GOVUK_TAXON_PATHS = [
     "/entering-and-staying-uk",
 ]
 
-CA_DELAY    = 1.0
+CA_DELAY    = 1.0   # 1s is polite enough for Citizens Advice
 GOVUK_DELAY = 0.5
 
 HEADERS = {
     "User-Agent": "CitizensAdviceChatbot/1.0 (research; University of Southampton)"
 }
+
+
+def make_session() -> requests.Session:
+    """Returns a session with automatic retries and exponential backoff."""
+    session = requests.Session()
+    retry = Retry(
+        total=5,
+        backoff_factor=2,       # waits 2, 4, 8, 16, 32 seconds between retries
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["GET"],
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    session.headers.update(HEADERS)
+    return session
 
 
 # ---------------------------------------------------------------------------
@@ -123,6 +141,7 @@ def is_valid_ca_url(url: str) -> bool:
 
 def crawl_ca_category(start_url: str, max_pages: int) -> list[str]:
     """Crawls a single CA category and returns all discovered content URLs."""
+    session  = make_session()
     visited: set[str] = set()
     queue:   list[str] = [start_url]
     found:   list[str] = []
@@ -134,7 +153,7 @@ def crawl_ca_category(start_url: str, max_pages: int) -> list[str]:
         visited.add(url)
 
         try:
-            response = requests.get(url, headers=HEADERS, timeout=10)
+            response = session.get(url, timeout=15)
             if response.status_code != 200:
                 continue
             if "text/html" not in response.headers.get("Content-Type", ""):
@@ -199,10 +218,10 @@ def collect_ca_urls(max_pages_per_category: int, checkpoint: dict) -> list[dict]
 
 def resolve_taxon_content_id(taxon_path: str) -> str | None:
     """Looks up a taxon's content_id UUID from the GOV.UK Content API."""
+    session = make_session()
     try:
-        response = requests.get(
+        response = session.get(
             f"https://www.gov.uk/api/content{taxon_path}",
-            headers=HEADERS,
             timeout=15,
         )
         response.raise_for_status()
@@ -221,6 +240,7 @@ def fetch_govuk_taxon_urls(taxon_path: str, max_results: int = 200) -> list[str]
 
     print(f"    Resolved content_id: {content_id}")
 
+    session   = make_session()
     urls      = []
     start     = 0
     page_size = 100
@@ -234,10 +254,9 @@ def fetch_govuk_taxon_urls(taxon_path: str, max_results: int = 200) -> list[str]
         }
 
         try:
-            response = requests.get(
+            response = session.get(
                 "https://www.gov.uk/api/search.json",
                 params=params,
-                headers=HEADERS,
                 timeout=15,
             )
             response.raise_for_status()
