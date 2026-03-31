@@ -14,8 +14,8 @@ export default function AuthCallback() {
         // Sync into our public.users table now, before NextAuth login
         await authAPI.syncUser(
           session.user.email!,
-          session.user.user_metadata?.username ?? null,
-          session.user.id,
+          session.user.user_metadata?.full_name ?? null,
+          null,
         ).catch(console.error);
 
         setMessage('Email confirmed! Redirecting to sign in...');

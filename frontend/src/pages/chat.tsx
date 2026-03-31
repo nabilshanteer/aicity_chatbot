@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
+import { useSession } from 'next-auth/react';
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuthSafe } from '@/hooks/useAuthSafe';
 import { chatAPI } from '@/services/api';
@@ -48,6 +49,7 @@ const newId = () => `${Date.now()}`;
 // ── Page ───────────────────────────────────────────────────────────────────
 export default function ChatPage() {
   const { isLoggedIn } = useAuthSafe();
+  const { data: session } = useSession();
   const router = useRouter();
 
   const [projects, setProjects] = useState<ProjectStore>(STUB_PROJECTS);
@@ -142,7 +144,8 @@ export default function ChatPage() {
     // Create a case in the backend RAG system
     let caseId = id; // fallback to local ID if backend fails
     try {
-      const { case_id } = await chatAPI.createCase();
+      const userId = session?.user?.id as string | undefined;
+      const { case_id } = await chatAPI.createCase(userId);
       caseId = case_id;
     } catch (error) {
       console.error('Failed to create backend case:', error);
@@ -203,7 +206,8 @@ export default function ChatPage() {
       // If no case ID, create one before sending message
       if (!caseId) {
         console.log('Creating backend case for conversation...');
-        const { case_id } = await chatAPI.createCase();
+        const userId = session?.user?.id as string | undefined;
+        const { case_id } = await chatAPI.createCase(userId);
         caseId = case_id;
         
         // Update conversation with the new case ID

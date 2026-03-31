@@ -3,13 +3,25 @@
 // Connected to FastAPI backend with Claude + FAISS vector search
 // ---------------------------------------------------------------------------
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8001';
+import { getSession } from 'next-auth/react';
+
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:8000';
+
+async function getAuthHeader() {
+  const session = await getSession();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (session?.user?.email) {
+    headers['X-User-ID'] = session.user.email as string;
+  }
+  return headers;
+}
 
 export const authAPI = {
   syncUser: async (email: string, name: string | null, googleId: string | null) => {
+    const headers = await getAuthHeader();
     const res = await fetch(`${API_BASE}/api/auth/sync`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ email, name, google_id: googleId }),
     });
     if (!res.ok) throw new Error('Failed to sync user');
@@ -18,12 +30,16 @@ export const authAPI = {
 };
 
 export const chatAPI = {
-  createCase: async (): Promise<{ case_id: string }> => {
+  createCase: async (userId?: string): Promise<{ case_id: string }> => {
     try {
+      const headers = await getAuthHeader();
+      if (userId) {
+        headers['X-User-ID'] = userId;
+      }
       const res = await fetch(`${API_BASE}/api/cases/start`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: '{}',
+        headers,
+        body: JSON.stringify({}),
       });
       
       if (!res.ok) {
@@ -44,9 +60,10 @@ export const chatAPI = {
 
   generateTitle: async (message: string): Promise<string> => {
     try {
+      const headers = await getAuthHeader();
       const res = await fetch(`${API_BASE}/api/chat/title`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ message }),
       });
       if (!res.ok) throw new Error();
@@ -63,9 +80,10 @@ export const chatAPI = {
     depth: string = 'standard',
   ): Promise<{ message: { content: string; sources?: string[] } }> => {
     try {
+      const headers = await getAuthHeader();
       const res = await fetch(`${API_BASE}/api/cases/${sessionId}/query`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ query: message, depth }),
       });
       
@@ -107,9 +125,10 @@ export const notesAPI = {
     fragments: string[],
     context: string,
   ): Promise<{ suggestions: Array<{ fragment: string; suggestion: string | null; full: string }> }> => {
+    const headers = await getAuthHeader();
     const res = await fetch(`${API_BASE}/api/notes/suggest`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ fragments, context }),
     });
     if (!res.ok) throw new Error('Failed to get suggestions');
@@ -117,15 +136,19 @@ export const notesAPI = {
   },
 
   get: async (chatId: string): Promise<{ notes: string[] }> => {
-    const res = await fetch(`${API_BASE}/api/notes/${chatId}`);
+    const headers = await getAuthHeader();
+    const res = await fetch(`${API_BASE}/api/notes/${chatId}`, {
+      headers,
+    });
     if (!res.ok) throw new Error('Failed to load notes');
     return res.json();
   },
 
   save: async (chatId: string, notes: string[]): Promise<void> => {
+    const headers = await getAuthHeader();
     const res = await fetch(`${API_BASE}/api/notes/${chatId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ notes }),
     });
     if (!res.ok) throw new Error('Failed to save notes');

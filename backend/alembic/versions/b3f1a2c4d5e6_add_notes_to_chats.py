@@ -18,8 +18,22 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column('cases', sa.Column('notes', sa.Text(), nullable=True))
+    # Add notes column to cases table (try both possible table names)
+    try:
+        op.add_column('cases', sa.Column('notes', sa.Text(), nullable=True))
+    except Exception:
+        try:
+            op.add_column('chats', sa.Column('notes', sa.Text(), nullable=True))
+        except Exception:
+            pass
 
 
 def downgrade() -> None:
-    op.drop_column('cases', 'notes')
+    try:
+        op.drop_column('cases', 'notes')
+    except Exception:
+        try:
+            op.drop_column('chats', 'notes')
+        except Exception:
+            pass
+

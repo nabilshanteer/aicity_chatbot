@@ -1,4 +1,5 @@
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship, declarative_base
 from datetime import datetime
 import uuid
@@ -23,19 +24,16 @@ class User(Base):
     role            = Column(String, default="advisor")  # advisor | admin | readonly
     created_at      = Column(DateTime, default=datetime.utcnow)
 
-    cases = relationship("Case", back_populates="user", cascade="all, delete")
-
 
 class Case(Base):
     __tablename__ = "cases"
 
-    id         = Column(String, primary_key=True, default=new_uuid)
-    user_id    = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    title      = Column(String, default="New Case")
-    notes      = Column(Text, nullable=True)  # JSON array of confirmed note strings
+    id         = Column(UUID(as_uuid=False), primary_key=True, default=new_uuid)
+    advisor_id = Column(UUID(as_uuid=False), nullable=True)
+    summary    = Column(Text, nullable=True)
+    notes      = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    user     = relationship("User", back_populates="cases")
     messages = relationship(
         "Message",
         back_populates="case",
@@ -47,8 +45,8 @@ class Case(Base):
 class Message(Base):
     __tablename__ = "messages"
 
-    id         = Column(String, primary_key=True, default=new_uuid)
-    case_id    = Column(String, ForeignKey("cases.id", ondelete="CASCADE"), nullable=False)
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    case_id    = Column(UUID(as_uuid=False), ForeignKey("cases.id", ondelete="CASCADE"), nullable=False)
     role       = Column(String, nullable=False)  # "user" | "assistant"
     content    = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
