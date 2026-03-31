@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+sentence-transformers
+python-dotenv
+supabase
+requests
+numpy
+google-genai
+passlib[bcrypt]

@@ -33,4 +33,3 @@ The system will:
 # **Summary**
 
 In conclusion, this AI-powered advisory assistant addresses the inefficiency caused by scattered data by providing a secure, centralised, and context-aware platform. By grounding all responses strictly in verified sources and prioritising UK GDPR compliance, the tool empowers staff to deliver faster, more consistent, and highly reliable guidance to service users.
-

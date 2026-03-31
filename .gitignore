@@ -20,6 +20,7 @@ dist/
 build/
 *.sqlite3
 *.db
+aicity/
 
 # ===== Node / Frontend =====
 node_modules/
@@ -31,6 +32,7 @@ yarn-error.log*
 
 # ===== Data & vector stores =====
 backend/data/
+scraper/output_files/
 
 # ===== OS & editor =====
 .DS_Store
@@ -39,6 +41,10 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+<<<<<<< HEAD
 
 #local env ignore
 aicity/
+=======
+CLAUDE.md
+>>>>>>> 40b4f025cdc24748439ef88d4cf35936ba457018

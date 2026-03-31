@@ -1,58 +1,46 @@
 # Citizens Advice AI Chatbot
 
-AI-powered advisory assistant for Citizens Advice staff. Built with FastAPI (backend) + Next.js (frontend), using Retrieval-Augmented Generation (RAG) over trusted source documents.
+AI-powered advisory assistant for Citizens Advice staff, using RAG over Citizens Advice source documents.
 
 ---
 
-## Project Structure
+## Setup
 
+**Prerequisites:** Python 3.10+, Node.js 18+
+
+**1. Backend env** — create `backend/.env`:
 ```
-citizen_chatbot/
-├── backend/                  # FastAPI Python backend
-│   ├── app/
-│   │   ├── api/              # Route handlers (chat, documents, auth)
-│   │   ├── core/             # Config, security
-│   │   ├── models/           # Pydantic schemas
-│   │   ├── services/         # LLM service, vector store
-│   │   ├── utils/            # Document processor
-│   │   └── main.py           # FastAPI app entrypoint
-│   ├── data/                 # Persisted ChromaDB vector store
-│   ├── requirements.txt
-│   └── .env.example
-├── frontend/                 # Next.js React frontend
-│   ├── src/
-│   │   ├── components/       # Reusable UI components
-│   │   ├── pages/            # Next.js pages
-│   │   ├── hooks/            # Custom React hooks
-│   │   ├── services/         # API client
-│   │   └── styles/           # Global CSS / Tailwind
-│   ├── package.json
-│   └── .env.local.example
-└── documents/                # Project documentation
-    ├── project_proposal.md
-    └── technical_specifications.md
+DATABASE_URL=...
+ANTHROPIC_API_KEY=...
+SUPABASE_URL=...
+SUPABASE_KEY=...
+CORS_ORIGINS=http://localhost:3000
+NEXTAUTH_SECRET=...
 ```
 
----
+**2. Frontend env** — create `frontend/.env.local`:
+```
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=...
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+```
 
-## Quick Start
-
-### Backend
+**3. Install dependencies**
 ```bash
-cd backend
-python -m venv venv
-source venv/bin/activate      # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env          # Fill in your API keys
-uvicorn app.main:app --reload --port 8000
-```
-
-### Frontend
-```bash
-cd frontend
+pip install -r backend/requirements.txt
 npm install
-cp .env.local.example .env.local
-npm run dev                   # Runs on http://localhost:3000
 ```
 
-API docs available at: http://localhost:8000/docs
+---
+
+## Run
+
+```bash
+npm run dev
+```
+
+Frontend → http://localhost:3000 · Backend → http://localhost:8000
