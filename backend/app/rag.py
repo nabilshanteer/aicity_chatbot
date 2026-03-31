@@ -1,65 +1,54 @@
 """
 RAG (Retrieval-Augmented Generation) module.
-Loads the FAISS index and sentence-transformer model once at startup,
-then exposes a search() function used by the cases query endpoint.
+Loads the sentence-transformer model once at startup, then exposes a
+search() function that queries Supabase pgvector via the match_chunks RPC.
 """
 import os
-import json
-import numpy as np
+from sentence_transformers import SentenceTransformer
+from supabase import create_client, Client
 
-# Populated by load() at application startup
 _model = None
-_index = None
-_mapping = None
+_supabase = None
 
 
 def load():
-    """Load the embedding model and FAISS index from disk."""
-    global _model, _index, _mapping
+    """Load the embedding model and Supabase client at startup."""
+    global _model, _supabase
 
-    # Resolve paths relative to the project root (two levels up from this file)
-    current_dir = os.path.dirname(os.path.abspath(__file__))  # backend/app/
-    project_root = os.path.dirname(os.path.dirname(current_dir))  # citizen_chatbot/
-    output_dir = os.path.join(project_root, "scraper", "output_files")
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_key = os.getenv("SUPABASE_KEY")
 
-    index_path = os.path.join(output_dir, "faiss_index.bin")
-    mapping_path = os.path.join(output_dir, "chunk_mapping.json")
-
-    if not os.path.exists(index_path) or not os.path.exists(mapping_path):
-        print(f"[RAG] WARNING: FAISS index or mapping not found at {output_dir}. RAG disabled.")
+    if not supabase_url or not supabase_key:
+        print("[RAG] WARNING: Missing Supabase credentials. RAG disabled.")
         return
 
     try:
-        import faiss
-        from sentence_transformers import SentenceTransformer
-
         print("[RAG] Loading embedding model (all-MiniLM-L6-v2)...")
         _model = SentenceTransformer("all-MiniLM-L6-v2")
-
-        print(f"[RAG] Loading FAISS index from {index_path}...")
-        _index = faiss.read_index(index_path)
-
-        with open(mapping_path, "r", encoding="utf-8") as f:
-            _mapping = json.load(f)
-
-        print(f"[RAG] Ready — {_index.ntotal} documents indexed.")
+        _supabase = create_client(supabase_url, supabase_key)
+        print("[RAG] Ready — connected to Supabase pgvector.")
     except Exception as e:
         print(f"[RAG] ERROR during load: {e}. RAG will be disabled.")
-        _model = _index = _mapping = None
+        _model = None
+        _supabase = None
 
 
 def search(query: str, top_k: int = 5) -> list[dict]:
     """
-    Encode query and return the top_k most relevant document chunks.
+    Encode query and return the top_k most relevant document chunks from pgvector.
     Returns an empty list if RAG is not loaded.
     """
-    if _model is None or _index is None or _mapping is None:
+    if _model is None or _supabase is None:
         return []
 
-    query_vec = np.array(_model.encode([query])).astype("float32")
-    _, indices = _index.search(query_vec, top_k)
-    return [_mapping[idx] for idx in indices[0] if idx != -1]
+    embedding = _model.encode(query).tolist()
+    result = _supabase.rpc("match_chunks", {
+        "query_embedding": embedding,
+        "match_count": top_k,
+    }).execute()
+
+    return result.data or []
 
 
 def is_available() -> bool:
-    return _model is not None and _index is not None and _mapping is not None
+    return _model is not None and _supabase is not None

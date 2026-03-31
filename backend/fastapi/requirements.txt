@@ -1,9 +1,9 @@
 fastapi
 uvicorn
-faiss-cpu
 sentence-transformers
 python-dotenv
 supabase
 requests
 numpy
-anthropic
+google-genai
+passlib[bcrypt]
