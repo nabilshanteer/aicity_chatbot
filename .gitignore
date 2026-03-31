@@ -20,6 +20,7 @@ dist/
 build/
 *.sqlite3
 *.db
+aicity/
 
 # ===== Node / Frontend =====
 node_modules/
@@ -39,3 +40,4 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+

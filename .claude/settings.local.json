@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(pip install:*)"
+      "Bash(pip install:*)",
+      "Bash(taskkill /PID 32632 /F)",
+      "Bash(kill 2428)"
     ]
   }
 }

@@ -1,0 +1,10 @@
+{
+  "name": "citizen-chatbot",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently --names \"BACKEND,FRONTEND\" --prefix-colors \"yellow,cyan\" \"cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000\" \"cd frontend && npm run dev\""
+  },
+  "dependencies": {
+    "concurrently": "^8.0.0"
+  }
+}
