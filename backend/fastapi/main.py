@@ -77,6 +77,19 @@ class SuggestResponse(BaseModel):
     suggestions: list[NoteSuggestion]
 
 
+class SummariseRequest(BaseModel):
+    transcript: str
+
+
+class SummaryPoint(BaseModel):
+    point: str
+    excerpt: str
+
+
+class SummariseResponse(BaseModel):
+    points: list[SummaryPoint]
+
+
 class SaveNotesRequest(BaseModel):
     notes: list[str]
 
@@ -359,6 +372,48 @@ Example: [{{"fragment": "2 years", "suggestion": "tenancy", "full": "2 years ten
                 for f in payload.fragments
             ]
         )
+
+
+@app.post("/api/notes/summarise", response_model=SummariseResponse)
+def summarise_transcript(payload: SummariseRequest):
+    if not payload.transcript.strip():
+        return SummariseResponse(points=[])
+
+    prompt = f"""You are assisting a Citizens Advice caseworker who has just finished a client call. \
+The following is a raw speech transcript from that call.
+
+Summarise the key points into a concise list. For each point also extract a short verbatim excerpt \
+from the transcript that directly supports it. Each point must be 1–2 sentences, factual, and written \
+in plain English. Ignore filler words, repetition, and mid-sentence thinking pauses. Focus only on \
+meaningful information relevant to a Citizens Advice case.
+
+Return ONLY a valid JSON array — no markdown, no explanation. Each object must have:
+- "point": 1–2 sentence summary of the key point
+- "excerpt": a short verbatim snippet (1–2 phrases) from the transcript that led to this point
+
+Example: [{{"point": "Client has rented for 3 years with no written tenancy agreement.", "excerpt": "ive been there about three years and never had anything in writing"}}]
+
+Transcript: {payload.transcript}"""
+
+    try:
+        response = gemini_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
+        raw = response.text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        data = json.loads(raw.strip())
+        return SummariseResponse(points=[
+            SummaryPoint(point=item["point"], excerpt=item.get("excerpt", ""))
+            for item in data if isinstance(item, dict) and "point" in item
+        ])
+    except Exception:
+        return SummariseResponse(points=[
+            SummaryPoint(point=payload.transcript.strip(), excerpt="")
+        ])
 
 
 @app.get("/api/notes/{chat_id}")

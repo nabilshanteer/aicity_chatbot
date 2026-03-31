@@ -135,6 +135,18 @@ export const notesAPI = {
     return res.json();
   },
 
+  summarise: async (transcript: string): Promise<Array<{ point: string; excerpt: string }>> => {
+    const headers = await getAuthHeader();
+    const res = await fetch(`${API_BASE}/api/notes/summarise`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ transcript }),
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.points as Array<{ point: string; excerpt: string }>;
+  },
+
   get: async (chatId: string): Promise<{ notes: string[] }> => {
     const headers = await getAuthHeader();
     const res = await fetch(`${API_BASE}/api/notes/${chatId}`, {
