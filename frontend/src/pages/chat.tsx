@@ -266,7 +266,7 @@ export default function ChatPage() {
         });
       }
 
-      await chatAPI.sendMessage(
+      const response = await chatAPI.sendMessage(
         caseId,
         text,
         activeProject?.depth ?? 'balanced',
@@ -293,6 +293,19 @@ export default function ChatPage() {
           };
         })(),
       );
+
+      // Add returned sources to the project sources panel (deduplicated)
+      if (response.message.sources?.length && activeProjectId) {
+        const existingUrls = new Set(activeProject?.sources.map((s) => s.url) ?? []);
+        const newSources = response.message.sources
+          .filter((url) => url !== 'Unknown' && !existingUrls.has(url))
+          .map((url) => ({ id: newId(), title: new URL(url).hostname.replace('www.', ''), url }));
+        if (newSources.length > 0) {
+          updateProject(activeProjectId, {
+            sources: [...(activeProject?.sources ?? []), ...newSources],
+          });
+        }
+      }
     } catch {
       setMessagesByConv((prev) => {
         const msgs = [...(prev[activeConvId] ?? [])];
