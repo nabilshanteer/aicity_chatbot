@@ -38,12 +38,12 @@ export default function DepthSlider({ depth, onChange }: Props) {
           [&::-webkit-slider-thumb]:border-white"
       />
       <div className="flex justify-between mt-1.5">
-        {OPTIONS.map((o) => (
+        {OPTIONS.map((o, i) => (
           <span
             key={o.value}
             className={`text-xs font-medium transition-colors ${
               depth === o.value ? 'text-blue-600 dark:text-blue-300' : 'text-gray-400'
-            }`}
+            } ${i === 0 ? 'text-left' : i === OPTIONS.length - 1 ? 'text-right' : 'text-center'} w-1/3`}
           >
             {o.label}
           </span>
