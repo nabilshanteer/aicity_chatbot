@@ -17,6 +17,7 @@ except ImportError:
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from passlib.context import CryptContext
 from pydantic import BaseModel, Field
 from sentence_transformers import SentenceTransformer
@@ -88,6 +89,12 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+async_claude_client = (
+    anthropic.AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    if anthropic and os.getenv("ANTHROPIC_API_KEY")
+    else None
 )
 
 
@@ -729,6 +736,129 @@ async def ask_question(case_id: str, request: QueryRequest):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
+
+# ---------------------------------------------------------------------------
+# Streaming query endpoint
+# ---------------------------------------------------------------------------
+
+@app.post("/api/cases/{case_id}/stream")
+async def stream_answer(case_id: str, request: QueryRequest):
+    case_res = supabase.table("cases").select("id", "summary", "notes").eq("id", case_id).execute()
+    if not case_res.data:
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found.")
+    case_summary = case_res.data[0].get("summary")
+    notes_raw = case_res.data[0].get("notes")
+    case_notes = json.loads(notes_raw) if notes_raw else []
+
+    top_k = 15 if request.depth.lower() == "deep" else 5
+    retrieved = retrieve_chunks(request.query, top_k=top_k)
+    sources = [doc.get('source_url', 'Unknown') for doc in retrieved if doc.get('source_url')]
+
+    history_res = (
+        supabase.table("messages")
+        .select("role", "content")
+        .eq("case_id", case_id)
+        .order("created_at", desc=True)
+        .limit(5)
+        .execute()
+    )
+    history = history_res.data[::-1] if history_res.data else []
+
+    context = "\n\n".join([
+        f"[Source: {doc.get('source_url', 'Unknown')}]\n{doc['text']}"
+        for doc in retrieved
+    ])
+    history_str = "".join(
+        f"{'User' if e['role'] == 'advisor' else 'Advisor'}: {e['content']}\n"
+        for e in history
+    )
+    summary_context = f"\n[Case Summary]\n{case_summary}\n" if case_summary else ""
+    notes_context = (
+        "\n[Caseworker Notes]\n" + "\n".join(f"- {n}" for n in case_notes) + "\n"
+        if case_notes else ""
+    )
+
+    depth_lower = request.depth.lower()
+    if depth_lower == "deep":
+        system_prompt = """You are a senior Citizens Advice specialist with deep expertise in UK benefits, housing, employment, debt, and family law.
+
+Provide a comprehensive, highly accurate, and thoroughly researched response. Your answer should:
+- Cover all relevant legal rights, entitlements, and obligations
+- Identify any exceptions, edge cases, or important caveats
+- Explain the step-by-step process the client should follow
+- Highlight any deadlines, time limits, or urgent actions required
+- Suggest related issues the client may not have considered
+- Cite every source used with its URL in square brackets like this: [Source: URL]
+
+Structure your response with clear headings and bullet points where appropriate. Be thorough — the advisor is relying on this for a complex case."""
+        max_tokens = 2048
+        llm_model = "claude-sonnet-4-6"
+    elif depth_lower == "quick":
+        system_prompt = """You are a Citizens Advice advisor. Give a brief, direct answer in 2-4 sentences maximum.
+
+Focus only on the most important point. Include one source URL if relevant: [Source: URL]. No lengthy explanations."""
+        max_tokens = 256
+        llm_model = "claude-haiku-4-5-20251001"
+    else:
+        system_prompt = """You are a professional advisor for Citizens Advice. Use the provided context and conversation history to answer the user's question accurately and helpfully.
+
+Always cite your sources from the provided context. When referencing information, include the source URL in square brackets like this: [Source: URL]
+
+If you don't have relevant information in the context, say so explicitly."""
+        max_tokens = 1024
+        llm_model = "claude-haiku-4-5-20251001"
+
+    prompt = f"""{summary_context}{notes_context}
+History:
+{history_str}
+
+Relevant Information:
+{context}
+
+User Question: {request.query}"""
+
+    async def event_stream():
+        full_answer = ""
+        try:
+            async with async_claude_client.messages.stream(
+                model=llm_model,
+                max_tokens=max_tokens,
+                system=system_prompt,
+                messages=[{"role": "user", "content": prompt}],
+            ) as stream:
+                async for text in stream.text_stream:
+                    full_answer += text
+                    yield f"data: {json.dumps({'type': 'token', 'text': text})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'error', 'text': str(e)})}\n\n"
+            return
+
+        supabase.table("messages").insert({"case_id": case_id, "role": "advisor", "content": request.query}).execute()
+        supabase.table("messages").insert({"case_id": case_id, "role": "assistant", "content": full_answer}).execute()
+
+        count_res = supabase.table("messages").select("id", count="exact").eq("case_id", case_id).execute()
+        total = count_res.count or 0
+        if total > 0 and total % 8 == 0:
+            recent = supabase.table("messages").select("role", "content").eq("case_id", case_id).order("created_at", desc=True).limit(8).execute()
+            new_summary = generate_case_summary(recent.data[::-1], case_summary)
+            supabase.table("cases").update({"summary": new_summary}).eq("id", case_id).execute()
+
+        yield f"data: {json.dumps({'type': 'done', 'sources': list(set(sources)), 'retrieved_documents': len(retrieved)})}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Chat title endpoint
+# ---------------------------------------------------------------------------
 
 @app.post("/api/chat/title")
 def generate_title(payload: TitleRequest):

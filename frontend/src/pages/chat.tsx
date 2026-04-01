@@ -129,7 +129,8 @@ export default function ChatPage() {
   const handleNewProject = async (name: string) => {
     try {
       setCreatingCase(true);
-      const { case_id } = await chatAPI.createCase();
+      const userId = session?.user?.email ?? undefined;
+      const { case_id } = await chatAPI.createCase(userId);
       await chatAPI.updateTitle(case_id, name);
 
       const conv: Conversation = { id: case_id, title: name, caseId: case_id };
@@ -224,8 +225,8 @@ export default function ChatPage() {
 
     try {
       const userId = session?.user?.email ?? undefined;
-      const response = await chatAPI.createCase(userId);
-      caseId = response.case_id;
+      const { case_id } = await chatAPI.createCase(userId);
+      caseId = case_id;
     } catch (error) {
       console.error('Failed to create backend case:', error);
     }
@@ -257,7 +258,7 @@ export default function ChatPage() {
   };
 
   const handleSend = async (text: string) => {
-    if (!activeConvId || !activeProjectId) return;
+    if (!activeConvId || !activeProjectId || !activeProject) return;
 
     const userMsg: Message = { role: 'user', content: text };
     setMessagesByConv((prev) => ({
@@ -265,11 +266,12 @@ export default function ChatPage() {
       [activeConvId]: [...(prev[activeConvId] ?? []), userMsg],
     }));
 
-    const conv = activeProject?.conversations.find((item) => item.id === activeConvId);
+    const conv = activeProject.conversations.find((item) => item.id === activeConvId);
     const isFirstMessage = (messagesByConv[activeConvId] ?? []).length === 0;
 
     if (isFirstMessage) {
       const projectId = activeProjectId;
+      const conversationId = activeConvId;
       chatAPI.generateTitle(text).then((title) => {
         setProjects((prev) => ({
           ...prev,
@@ -277,7 +279,7 @@ export default function ChatPage() {
             ...prev[projectId],
             name: title,
             conversations: prev[projectId]?.conversations.map((item) =>
-              item.id === projectId ? { ...item, title } : item,
+              item.id === conversationId ? { ...item, title } : item,
             ) ?? [],
           },
         }));
@@ -286,46 +288,93 @@ export default function ChatPage() {
       });
     }
 
+    setMessagesByConv((prev) => ({
+      ...prev,
+      [activeConvId]: [...(prev[activeConvId] ?? []), { role: 'assistant', content: '' }],
+    }));
     setLoading(true);
+
     try {
       let caseId = conv?.caseId;
 
       if (!caseId) {
         const userId = session?.user?.email ?? undefined;
-        const response = await chatAPI.createCase(userId);
-        caseId = response.case_id;
+        const { case_id } = await chatAPI.createCase(userId);
+        caseId = case_id;
 
         updateProject(activeProjectId, {
-          conversations: activeProject!.conversations.map((item) =>
+          conversations: activeProject.conversations.map((item) =>
             item.id === activeConvId ? { ...item, caseId } : item,
           ),
         });
       }
 
+      const currentConvId = activeConvId;
+      const currentSources = activeProject.sources;
+
       const response = await chatAPI.sendMessage(
         caseId,
         text,
-        activeProject?.depth ?? 'balanced',
-        activeProject?.notes ?? [],
-        activeProject?.sources.map((source) => source.url) ?? [],
-        activeProject?.documents.map((document) => document.name) ?? [],
+        activeProject.depth ?? 'balanced',
+        activeProject.notes ?? [],
+        activeProject.sources.map((source) => source.url) ?? [],
+        activeProject.documents.map((document) => document.name) ?? [],
+        (() => {
+          let buffer = '';
+          let timerId: ReturnType<typeof setTimeout> | null = null;
+
+          return (token: string) => {
+            buffer += token;
+            if (timerId) return;
+
+            timerId = setTimeout(() => {
+              const chunk = buffer;
+              buffer = '';
+              timerId = null;
+
+              setMessagesByConv((prev) => {
+                const msgs = [...(prev[currentConvId] ?? [])];
+                const last = msgs[msgs.length - 1];
+                if (last?.role === 'assistant') {
+                  msgs[msgs.length - 1] = { ...last, content: last.content + chunk };
+                }
+                return { ...prev, [currentConvId]: msgs };
+              });
+            }, 50);
+          };
+        })(),
       );
 
-      setMessagesByConv((prev) => ({
-        ...prev,
-        [activeConvId]: [
-          ...(prev[activeConvId] ?? []),
-          { role: 'assistant', content: response.message?.content ?? 'No response received.' },
-        ],
-      }));
+      if (response.message.sources?.length) {
+        const existingUrls = new Set(currentSources.map((source) => source.url));
+        const newSources = response.message.sources
+          .filter((url) => url !== 'Unknown' && !existingUrls.has(url))
+          .map((url) => {
+            let title = url;
+            try {
+              title = new URL(url).hostname.replace('www.', '');
+            } catch {
+              title = url;
+            }
+
+            return { id: newId(), title, url };
+          });
+
+        if (newSources.length > 0) {
+          updateProject(activeProjectId, {
+            sources: [...currentSources, ...newSources],
+          });
+        }
+      }
     } catch {
-      setMessagesByConv((prev) => ({
-        ...prev,
-        [activeConvId]: [
-          ...(prev[activeConvId] ?? []),
-          { role: 'assistant', content: 'Something went wrong. Please try again.' },
-        ],
-      }));
+      setMessagesByConv((prev) => {
+        const msgs = [...(prev[activeConvId] ?? [])];
+        const last = msgs[msgs.length - 1];
+        if (last?.role === 'assistant') {
+          msgs[msgs.length - 1] = { ...last, content: 'Something went wrong. Please try again.' };
+        }
+        return { ...prev, [activeConvId]: msgs };
+      });
     } finally {
       setLoading(false);
     }
@@ -444,7 +493,7 @@ export default function ChatPage() {
             <>
               <ChatWindow
                 messages={activeMessages}
-                loading={loading}
+                loading={loading && activeMessages[activeMessages.length - 1]?.content === ''}
               />
 
               <div className="shrink-0 bg-white dark:bg-gray-700 border-t border-gray-100 dark:border-gray-600">
