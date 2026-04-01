@@ -1,74 +1,183 @@
 """
 chunker.py
 ----------
-Reads output_files/scraped_data.json, splits each document into
-overlapping text chunks, and writes output_files/chunked_data.json.
-
-Overlap ensures that sentences spanning a chunk boundary are represented
-in both adjacent chunks, so retrieval doesn't miss context at the edges.
+Reads output_files/scraped_data.json, converts structured page sections into
+heading-aware chunks, and writes output_files/chunked_data.json.
 
 Usage:
     python chunker.py
 """
 
 import json
-import re
 import os
+import re
 
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
-INPUT_FILE  = "output_files/scraped_data.json"
+INPUT_FILE = "output_files/scraped_data.json"
 OUTPUT_FILE = "output_files/chunked_data.json"
 
-TARGET_CHUNK_LENGTH = 500   # target characters per chunk
-OVERLAP_SENTENCES   = 2     # sentences to repeat at the start of each new chunk
+TARGET_CHUNK_LENGTH = 600
+HARD_MAX_CHUNK_LENGTH = 900
+OVERLAP_CHARS = 120
+MIN_CHUNK_LENGTH = 80
 
 
 # ---------------------------------------------------------------------------
-# Chunking
+# Chunking helpers
 # ---------------------------------------------------------------------------
+
+def normalize_text(text: str) -> str:
+    return re.sub(r"\s+", " ", text or "").strip()
+
 
 def split_sentences(text: str) -> list[str]:
-    """Splits text into sentences on punctuation boundaries."""
-    return [s.strip() for s in re.split(r'(?<=[.!?]) +', text) if s.strip()]
+    return [sentence.strip() for sentence in re.split(r"(?<=[.!?])\s+", text) if sentence.strip()]
 
 
-def chunk_text(text: str, target_length: int = TARGET_CHUNK_LENGTH,
-               overlap: int = OVERLAP_SENTENCES) -> list[str]:
+def parent_heading_path(path: str) -> str:
+    if " > " not in path:
+        return ""
+    return path.rsplit(" > ", 1)[0]
+
+
+def split_oversized_section(text: str) -> list[str]:
     """
-    Splits text into chunks of approximately target_length characters.
-    Each chunk overlaps with the previous one by `overlap` sentences to
-    avoid losing context at chunk boundaries.
+    Splits a long section into overlapping sentence-based chunks while staying
+    within a single heading boundary.
     """
-    if not text:
+    sentences = split_sentences(text)
+    if not sentences:
         return []
 
-    sentences = split_sentences(text)
     chunks = []
     i = 0
 
     while i < len(sentences):
-        current_chunk = ""
+        current = ""
         j = i
 
-        # Build chunk up to target length
-        while j < len(sentences) and len(current_chunk) + len(sentences[j]) <= target_length + 100:
-            current_chunk += sentences[j] + " "
+        while j < len(sentences):
+            candidate = (current + " " + sentences[j]).strip() if current else sentences[j]
+            if len(candidate) > TARGET_CHUNK_LENGTH and current:
+                break
+            current = candidate
             j += 1
+            if len(current) >= TARGET_CHUNK_LENGTH:
+                break
 
-        # If a single sentence exceeds target length, take it anyway
-        if not current_chunk and i < len(sentences):
-            current_chunk = sentences[i] + " "
+        if not current:
+            current = sentences[i]
             j = i + 1
 
-        if current_chunk.strip():
-            chunks.append(current_chunk.strip())
+        chunks.append(current.strip())
 
-        # Step forward, stepping back by `overlap` sentences for the next chunk
-        i = max(i + 1, j - overlap)
+        if j >= len(sentences):
+            break
+
+        overlap_length = 0
+        next_start = j
+        while next_start > i:
+            overlap_length += len(sentences[next_start - 1]) + 1
+            next_start -= 1
+            if overlap_length >= OVERLAP_CHARS:
+                break
+
+        if next_start == i:
+            i = j
+        else:
+            i = next_start
+
+    return chunks
+
+
+def normalise_sections(doc: dict) -> list[dict]:
+    sections = doc.get("sections") or []
+
+    if not sections and doc.get("content"):
+        sections = [{
+            "section_order": 0,
+            "heading": doc.get("page_title") or "Page Content",
+            "heading_level": 1,
+            "heading_path": doc.get("page_title") or "Page Content",
+            "text": doc.get("content", ""),
+        }]
+
+    cleaned = []
+    for section in sections:
+        text = normalize_text(section.get("text", ""))
+        if not text:
+            continue
+        cleaned.append({
+            "section_order": section.get("section_order", len(cleaned)),
+            "heading": section.get("heading") or doc.get("page_title") or "Page Content",
+            "heading_level": section.get("heading_level", 1),
+            "heading_path": section.get("heading_path") or section.get("heading") or doc.get("page_title") or "Page Content",
+            "text": text,
+        })
+
+    merged = []
+    i = 0
+    while i < len(cleaned):
+        current = dict(cleaned[i])
+
+        if len(current["text"]) < MIN_CHUNK_LENGTH and i + 1 < len(cleaned):
+            next_section = dict(cleaned[i + 1])
+            if parent_heading_path(current["heading_path"]) == parent_heading_path(next_section["heading_path"]):
+                next_section["text"] = f"{current['text']} {next_section['text']}".strip()
+                cleaned[i + 1] = next_section
+                i += 1
+                continue
+
+        if len(current["text"]) >= MIN_CHUNK_LENGTH:
+            merged.append(current)
+        i += 1
+
+    for order, section in enumerate(merged):
+        section["section_order"] = order
+
+    return merged
+
+
+def chunk_document(doc: dict) -> list[dict]:
+    source_url = doc.get("source_url", "unknown")
+    source = doc.get("source", "unknown")
+    category = doc.get("category", "unknown")
+    last_scraped = doc.get("last_scraped", "unknown")
+    page_title = doc.get("page_title") or source_url
+
+    sections = normalise_sections(doc)
+    chunks = []
+
+    for section in sections:
+        section_text = section["text"]
+        if len(section_text) <= HARD_MAX_CHUNK_LENGTH:
+            text_chunks = [section_text]
+        else:
+            text_chunks = split_oversized_section(section_text)
+
+        for chunk_order, chunk_text in enumerate(text_chunks):
+            chunk_text = normalize_text(chunk_text)
+            if len(chunk_text) < MIN_CHUNK_LENGTH:
+                continue
+
+            chunks.append({
+                "chunk_id": f"{source_url}#s{section['section_order']}-c{chunk_order}",
+                "source_url": source_url,
+                "source": source,
+                "category": category,
+                "last_scraped": last_scraped,
+                "page_title": page_title,
+                "heading": section["heading"],
+                "heading_level": section["heading_level"],
+                "heading_path": section["heading_path"],
+                "section_order": section["section_order"],
+                "chunk_order": chunk_order,
+                "text": chunk_text,
+            })
 
     return chunks
 
@@ -92,37 +201,14 @@ def process_scraped_file(input_filename: str, output_filename: str) -> None:
     print(f"Chunking {len(documents)} documents...")
 
     all_chunks = []
-    skipped = 0
-
     for doc in documents:
-        text      = doc.get("content", "")
-        source    = doc.get("source_url", "unknown")
-        timestamp = doc.get("last_scraped", "unknown")
-        source_type = doc.get("source", "unknown")
-        category  = doc.get("category", "unknown")
-
-        text_chunks = chunk_text(text)
-
-        for i, chunk in enumerate(text_chunks):
-            if len(chunk) < 50:
-                skipped += 1
-                continue
-
-            all_chunks.append({
-                "chunk_id":    f"{source}#chunk-{i}",
-                "source_url":  source,
-                "source":      source_type,
-                "category":    category,
-                "last_scraped": timestamp,
-                "text":        chunk,
-            })
+        all_chunks.extend(chunk_document(doc))
 
     os.makedirs(os.path.dirname(output_filename), exist_ok=True)
     with open(output_filename, "w", encoding="utf-8") as f:
         json.dump(all_chunks, f, ensure_ascii=False, indent=2)
 
-    print(f"Created {len(all_chunks)} chunks from {len(documents)} documents "
-          f"({skipped} short chunks discarded)")
+    print(f"Created {len(all_chunks)} chunks from {len(documents)} documents")
     print(f"Saved to: {output_filename}")
 
 

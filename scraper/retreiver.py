@@ -26,6 +26,9 @@ def search(query: str, supabase: Client, model: SentenceTransformer, top_k: int 
     result = supabase.rpc("match_chunks", {
         "query_embedding": embedding,
         "match_count": top_k,
+        "source_urls": None,
+        "sources": None,
+        "categories": None,
     }).execute()
     return result.data or []
 
@@ -63,8 +66,9 @@ if __name__ == "__main__":
 
         print(f"\n--- Top {len(results)} Results ---")
         for i, res in enumerate(results, start=1):
-            print(f"\nResult {i}  (distance: {res.get('distance', 'n/a'):.4f})")
+            print(f"\nResult {i}  (similarity: {float(res.get('similarity', 0.0)):.4f})")
             print(f"Source  : {res.get('source_url', 'unknown')}")
             print(f"Category: {res.get('category', 'unknown')}")
+            print(f"Heading : {res.get('heading_path') or res.get('page_title', 'unknown')}")
             print(f"Text    : {res.get('text', '')[:300]}...")
             print("-" * 40)

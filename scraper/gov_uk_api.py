@@ -12,6 +12,38 @@ def clean_html_text(html_content):
     # get_text() extracts all text and separates blocks with a space
     return soup.get_text(separator=' ', strip=True)
 
+
+def build_structured_sections(page_title, details):
+    sections = []
+
+    if 'parts' in details:
+        for part in details['parts']:
+            text = clean_html_text(part.get('body', ''))
+            if not text:
+                continue
+
+            heading = part.get('title') or page_title
+            sections.append({
+                "section_order": len(sections),
+                "heading": heading,
+                "heading_level": 2,
+                "heading_path": f"{page_title} > {heading}" if heading != page_title else page_title,
+                "text": text,
+            })
+
+    if not sections and 'body' in details and isinstance(details['body'], str):
+        text = clean_html_text(details['body'])
+        if text:
+            sections.append({
+                "section_order": 0,
+                "heading": page_title,
+                "heading_level": 1,
+                "heading_path": page_title,
+                "text": text,
+            })
+
+    return sections
+
 def fetch_govuk_advice(topic, max_results=3):
     """
     Searches GOV.UK for a topic, handles different page formats (Answers vs Guides),
@@ -40,29 +72,17 @@ def fetch_govuk_advice(topic, max_results=3):
                 content_data = content_response.json()
                 details = content_data.get('details', {})
                 
-                raw_html = ""
-                
-                # Format 1: Simple "Answer" pages (has a direct body)
-                if 'body' in details and isinstance(details['body'], str):
-                    raw_html += details['body']
-                
-                # Format 2: "Guide" pages (split into multiple parts/tabs)
-                if 'parts' in details:
-                    for part in details['parts']:
-                        # Add the part title as a header, then the body
-                        if 'title' in part:
-                            raw_html += f"<h2>{part['title']}</h2> "
-                        if 'body' in part:
-                            raw_html += part['body'] + " "
-                
-                # Clean the combined HTML into pure text
-                clean_text = clean_html_text(raw_html)
+                page_title = content_data.get('title') or f"https://www.gov.uk{page_path}"
+                sections = build_structured_sections(page_title, details)
+                clean_text = "\n\n".join(section["text"] for section in sections)
                 
                 # Only save if we actually found text
                 if clean_text:
                     document = {
                         "source_url": f"https://www.gov.uk{page_path}",
                         "last_scraped": datetime.utcnow().isoformat() + "Z",
+                        "page_title": page_title,
+                        "sections": sections,
                         "content": clean_text
                     }
                     extracted_documents.append(document)
