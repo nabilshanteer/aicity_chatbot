@@ -235,7 +235,8 @@ async def ask_question(case_id: str, request: QueryRequest):
         case_summary = case_res.data[0].get("summary")
 
         print(f"[QUERY] Encoding question for vector search...")
-        retrieved = retrieve_chunks(request.query)
+        top_k = 15 if request.depth.lower() == "deep" else 5
+        retrieved = retrieve_chunks(request.query, top_k=top_k)
         print(f"[QUERY] Retrieved {len(retrieved)} documents")
 
         history_res = (
