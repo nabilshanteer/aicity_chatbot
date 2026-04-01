@@ -3,7 +3,9 @@
     "allow": [
       "Bash(pip install:*)",
       "Bash(taskkill /PID 32632 /F)",
-      "Bash(kill 2428)"
+      "Bash(kill 2428)",
+      "Bash(find /Users/danteturay/Documents/AI Sandpit/aicity_chatbot/frontend/src/pages -type f -name *.js -o -name *.jsx -o -name *.ts -o -name *.tsx)",
+      "Bash(find /Users/danteturay/Documents/AI Sandpit/aicity_chatbot/frontend/src/components -type f -name *.js -o -name *.jsx -o -name *.ts -o -name *.tsx)"
     ]
   }
 }

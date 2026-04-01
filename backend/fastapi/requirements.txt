@@ -5,5 +5,5 @@ python-dotenv
 supabase
 requests
 numpy
-google-genai
+anthropic
 passlib[bcrypt]

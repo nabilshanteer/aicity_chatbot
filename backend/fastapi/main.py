@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
 from pydantic import BaseModel
-import google.genai as genai
+import anthropic
 from sentence_transformers import SentenceTransformer
 from contextlib import asynccontextmanager
 from supabase import create_client, Client
@@ -43,10 +43,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-gemini_client = genai.Client(
-    api_key=os.getenv("GEMINI_API_KEY"),
-    http_options={"api_version": "v1"},
-)
+claude_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +115,7 @@ def retrieve_chunks(query: str, top_k: int = 5) -> list[dict]:
     return result.data or []
 
 
-def generate_ai_response(user_query, retrieved_chunks, history, case_summary=None):
+def generate_ai_response(user_query, retrieved_chunks, history, case_summary=None, depth: str = "Standard"):
     context = "\n\n".join([
         f"[Source: {doc.get('source_url', 'Unknown')}]\n{doc['text']}"
         for doc in retrieved_chunks
@@ -132,12 +129,38 @@ def generate_ai_response(user_query, retrieved_chunks, history, case_summary=Non
 
     summary_context = f"\n[Case Summary]\n{case_summary}\n" if case_summary else ""
 
-    prompt = f"""You are a professional advisor for Citizens Advice. Use the provided context and conversation history to answer the user's question accurately and helpfully.
+    depth_lower = depth.lower()
 
-IMPORTANT: Always cite your sources from the provided context. When referencing information, include the source URL in square brackets like this: [Source: URL]
+    if depth_lower == "deep":
+        system_prompt = """You are a senior Citizens Advice specialist with deep expertise in UK benefits, housing, employment, debt, and family law.
 
-If you don't have relevant information in the context, say so explicitly.
-{summary_context}
+Provide a comprehensive, highly accurate, and thoroughly researched response. Your answer should:
+- Cover all relevant legal rights, entitlements, and obligations
+- Identify any exceptions, edge cases, or important caveats
+- Explain the step-by-step process the client should follow
+- Highlight any deadlines, time limits, or urgent actions required
+- Suggest related issues the client may not have considered
+- Cite every source used with its URL in square brackets like this: [Source: URL]
+
+Structure your response with clear headings and bullet points where appropriate. Be thorough — the advisor is relying on this for a complex case."""
+        max_tokens = 2048
+        model = "claude-sonnet-4-6"
+    elif depth_lower == "quick":
+        system_prompt = """You are a Citizens Advice advisor. Give a brief, direct answer in 2-4 sentences maximum.
+
+Focus only on the most important point. Include one source URL if relevant: [Source: URL]. No lengthy explanations."""
+        max_tokens = 256
+        model = "claude-haiku-4-5-20251001"
+    else:  # balanced (default)
+        system_prompt = """You are a professional advisor for Citizens Advice. Use the provided context and conversation history to answer the user's question accurately and helpfully.
+
+Always cite your sources from the provided context. When referencing information, include the source URL in square brackets like this: [Source: URL]
+
+If you don't have relevant information in the context, say so explicitly."""
+        max_tokens = 1024
+        model = "claude-haiku-4-5-20251001"
+
+    prompt = f"""{summary_context}
 History:
 {history_str}
 
@@ -147,11 +170,13 @@ Relevant Information:
 User Question: {user_query}"""
 
     try:
-        response = gemini_client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
+        response = claude_client.messages.create(
+            model=model,
+            max_tokens=max_tokens,
+            system=system_prompt,
+            messages=[{"role": "user", "content": prompt}],
         )
-        return response.text, sources
+        return response.content[0].text, sources
     except Exception as e:
         return f"Error generating response: {str(e)}", sources
 
@@ -172,11 +197,12 @@ Recent Conversation:
 {messages_str}"""
 
     try:
-        response = gemini_client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=summarization_prompt,
+        response = claude_client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=256,
+            messages=[{"role": "user", "content": summarization_prompt}],
         )
-        return response.text.strip()
+        return response.content[0].text.strip()
     except Exception as e:
         return f"Unable to generate summary: {str(e)}"
 
@@ -223,8 +249,8 @@ async def ask_question(case_id: str, request: QueryRequest):
         history = history_res.data[::-1] if history_res.data else []
         print(f"[QUERY] Retrieved {len(history)} messages from history")
 
-        print(f"[QUERY] Generating response with Gemini...")
-        answer, sources = generate_ai_response(request.query, retrieved, history, case_summary)
+        print(f"[QUERY] Generating response with Claude Haiku...")
+        answer, sources = generate_ai_response(request.query, retrieved, history, case_summary, request.depth)
         print(f"[QUERY] Generated response successfully")
 
         supabase.table("messages").insert({
@@ -292,11 +318,12 @@ def generate_title(payload: TitleRequest):
             f"Reply with ONLY the title — no punctuation, no quotes, no explanation.\n\n"
             f"{payload.message[:500]}"
         )
-        response = gemini_client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
+        response = claude_client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=32,
+            messages=[{"role": "user", "content": prompt}],
         )
-        title = response.text.strip().strip('"').strip("'")
+        title = response.content[0].text.strip().strip('"').strip("'")
         return {"title": title}
     except Exception:
         words = payload.message.strip().split()
@@ -333,11 +360,12 @@ Return ONLY a valid JSON array — no markdown, no explanation. Each object must
 Example: [{{"fragment": "2 years", "suggestion": "tenancy", "full": "2 years tenancy"}}]"""
 
     try:
-        response = gemini_client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
+        response = claude_client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=512,
+            messages=[{"role": "user", "content": prompt}],
         )
-        raw = response.text.strip()
+        raw = response.content[0].text.strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
