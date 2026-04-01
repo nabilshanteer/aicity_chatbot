@@ -144,7 +144,7 @@ export default function ChatPage() {
     // Create a case in the backend RAG system
     let caseId = id; // fallback to local ID if backend fails
     try {
-      const userId = session?.user?.id as string | undefined;
+      const userId = session?.user?.email ?? undefined;
       const { case_id } = await chatAPI.createCase(userId);
       caseId = case_id;
     } catch (error) {
@@ -206,7 +206,7 @@ export default function ChatPage() {
       // If no case ID, create one before sending message
       if (!caseId) {
         console.log('Creating backend case for conversation...');
-        const userId = session?.user?.id as string | undefined;
+        const userId = session?.user?.email ?? undefined;
         const { case_id } = await chatAPI.createCase(userId);
         caseId = case_id;
         
@@ -218,7 +218,14 @@ export default function ChatPage() {
         });
       }
       
-      const response = await chatAPI.sendMessage(caseId, text, activeProject?.depth ?? 'balanced');
+      const response = await chatAPI.sendMessage(
+        caseId,
+        text,
+        activeProject?.depth ?? 'balanced',
+        activeProject?.notes ?? [],
+        activeProject?.sources.map((source) => source.url) ?? [],
+        activeProject?.documents.map((document) => document.name) ?? [],
+      );
       setMessagesByConv((prev) => ({
         ...prev,
         [activeConvId]: [

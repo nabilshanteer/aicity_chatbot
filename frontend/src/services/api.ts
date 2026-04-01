@@ -78,13 +78,22 @@ export const chatAPI = {
     sessionId: string,
     message: string,
     depth: string = 'standard',
+    notes: string[] = [],
+    selectedSources: string[] = [],
+    selectedDocuments: string[] = [],
   ): Promise<{ message: { content: string; sources?: string[] } }> => {
     try {
       const headers = await getAuthHeader();
       const res = await fetch(`${API_BASE}/api/cases/${sessionId}/query`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ query: message, depth }),
+        body: JSON.stringify({
+          query: message,
+          depth,
+          notes,
+          selected_sources: selectedSources,
+          selected_documents: selectedDocuments,
+        }),
       });
       
       if (!res.ok) {
