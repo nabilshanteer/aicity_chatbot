@@ -1,6 +1,6 @@
 import json
 import uuid
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
@@ -74,8 +74,25 @@ class SuggestResponse(BaseModel):
     suggestions: list[NoteSuggestion]
 
 
+class SummariseRequest(BaseModel):
+    transcript: str
+
+
+class SummaryPoint(BaseModel):
+    point: str
+    excerpt: str
+
+
+class SummariseResponse(BaseModel):
+    points: list[SummaryPoint]
+
+
 class SaveNotesRequest(BaseModel):
     notes: list[str]
+
+
+class TitleUpdateRequest(BaseModel):
+    title: str
 
 
 class SyncUserRequest(BaseModel):
@@ -115,7 +132,7 @@ def retrieve_chunks(query: str, top_k: int = 5) -> list[dict]:
     return result.data or []
 
 
-def generate_ai_response(user_query, retrieved_chunks, history, case_summary=None, depth: str = "Standard"):
+def generate_ai_response(user_query, retrieved_chunks, history, case_summary=None, case_notes=None, depth: str = "Standard"):
     context = "\n\n".join([
         f"[Source: {doc.get('source_url', 'Unknown')}]\n{doc['text']}"
         for doc in retrieved_chunks
@@ -128,6 +145,10 @@ def generate_ai_response(user_query, retrieved_chunks, history, case_summary=Non
         history_str += f"{speaker}: {entry['content']}\n"
 
     summary_context = f"\n[Case Summary]\n{case_summary}\n" if case_summary else ""
+    notes_context = (
+        "\n[Caseworker Notes]\n" + "\n".join(f"- {n}" for n in case_notes) + "\n"
+        if case_notes else ""
+    )
 
     depth_lower = depth.lower()
 
@@ -160,7 +181,7 @@ If you don't have relevant information in the context, say so explicitly."""
         max_tokens = 1024
         model = "claude-haiku-4-5-20251001"
 
-    prompt = f"""{summary_context}
+    prompt = f"""{summary_context}{notes_context}
 History:
 {history_str}
 
@@ -211,16 +232,83 @@ Recent Conversation:
 # Cases / chat endpoints
 # ---------------------------------------------------------------------------
 
-@app.post("/api/cases/start")
-async def start_case():
+@app.get("/api/cases")
+async def list_cases(request: Request):
+    user_email = request.headers.get("X-User-ID")
+    if not user_email:
+        raise HTTPException(status_code=401, detail="Missing X-User-ID header")
+    user_res = supabase.table("users").select("id").eq("email", user_email).execute()
+    if not user_res.data:
+        return {"cases": []}
+    user_id = user_res.data[0]["id"]
+    res = (
+        supabase.table("cases")
+        .select("id, title, notes, created_at")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    cases = []
+    for row in (res.data or []):
+        notes_raw = row.get("notes")
+        cases.append({
+            "id": row["id"],
+            "title": row.get("title"),
+            "notes": json.loads(notes_raw) if notes_raw else [],
+            "created_at": row.get("created_at"),
+        })
+    return {"cases": cases}
+
+
+@app.get("/api/cases/{case_id}/messages")
+async def get_messages(case_id: str):
+    res = (
+        supabase.table("messages")
+        .select("role, content")
+        .eq("case_id", case_id)
+        .order("created_at", desc=False)
+        .execute()
+    )
+    return {"messages": res.data or []}
+
+
+@app.put("/api/cases/{case_id}/title")
+async def update_case_title(case_id: str, payload: TitleUpdateRequest):
     try:
-        response = supabase.table("cases").insert({}).execute()
-        if response.data and len(response.data) > 0:
-            return {"case_id": response.data[0]["id"]}
-        raise HTTPException(status_code=500, detail="Supabase inserted the row but returned no data.")
+        supabase.table("cases").update({"title": payload.title}).eq("id", case_id).execute()
     except Exception as e:
-        print(f"Supabase Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        if "PGRST204" in str(e) or "title" in str(e):
+            pass  # column not yet added — silently skip
+        else:
+            raise HTTPException(status_code=500, detail=str(e))
+    return {"ok": True}
+
+
+@app.post("/api/cases/start")
+async def start_case(request: Request):
+    user_email = request.headers.get("X-User-ID")
+    user_id = None
+    if user_email:
+        try:
+            user_res = supabase.table("users").select("id").eq("email", user_email).execute()
+            if user_res.data:
+                user_id = user_res.data[0]["id"]
+        except Exception:
+            pass
+
+    # Try inserting with user_id; if the column doesn't exist yet, fall back to empty row
+    for row in ([{"user_id": user_id}] if user_id else [{}]) + [{}]:
+        try:
+            response = supabase.table("cases").insert(row).execute()
+            if response.data and len(response.data) > 0:
+                return {"case_id": response.data[0]["id"]}
+        except Exception as e:
+            err_str = str(e)
+            if "PGRST204" in err_str or "user_id" in err_str or "title" in err_str:
+                continue  # column missing — retry without it
+            print(f"Supabase Error: {e}")
+            raise HTTPException(status_code=500, detail=err_str)
+    raise HTTPException(status_code=500, detail="Failed to create case in Supabase.")
 
 
 @app.post("/api/cases/{case_id}/query")
@@ -229,10 +317,12 @@ async def ask_question(case_id: str, request: QueryRequest):
         print(f"[QUERY] Received query for case_id: {case_id}")
         print(f"[QUERY] Question: {request.query}")
 
-        case_res = supabase.table("cases").select("id", "summary").eq("id", case_id).execute()
+        case_res = supabase.table("cases").select("id", "summary", "notes").eq("id", case_id).execute()
         if not case_res.data:
             raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found in database.")
         case_summary = case_res.data[0].get("summary")
+        notes_raw = case_res.data[0].get("notes")
+        case_notes = json.loads(notes_raw) if notes_raw else []
 
         print(f"[QUERY] Encoding question for vector search...")
         top_k = 15 if request.depth.lower() == "deep" else 5
@@ -250,8 +340,8 @@ async def ask_question(case_id: str, request: QueryRequest):
         history = history_res.data[::-1] if history_res.data else []
         print(f"[QUERY] Retrieved {len(history)} messages from history")
 
-        print(f"[QUERY] Generating response with Claude Haiku...")
-        answer, sources = generate_ai_response(request.query, retrieved, history, case_summary, request.depth)
+        print(f"[QUERY] Generating response with Claude...")
+        answer, sources = generate_ai_response(request.query, retrieved, history, case_summary, case_notes, request.depth)
         print(f"[QUERY] Generated response successfully")
 
         supabase.table("messages").insert({
@@ -388,6 +478,48 @@ Example: [{{"fragment": "2 years", "suggestion": "tenancy", "full": "2 years ten
                 for f in payload.fragments
             ]
         )
+
+
+@app.post("/api/notes/summarise", response_model=SummariseResponse)
+def summarise_transcript(payload: SummariseRequest):
+    if not payload.transcript.strip():
+        return SummariseResponse(points=[])
+
+    prompt = f"""You are assisting a Citizens Advice caseworker who has just finished a client call. \
+The following is a raw speech transcript from that call.
+
+Summarise the key points into a concise list. For each point also extract a short verbatim excerpt \
+from the transcript that directly supports it. Each point must be 1–2 sentences, factual, and written \
+in plain English. Ignore filler words, repetition, and mid-sentence thinking pauses. Focus only on \
+meaningful information relevant to a Citizens Advice case.
+
+Return ONLY a valid JSON array — no markdown, no explanation. Each object must have:
+- "point": 1–2 sentence summary of the key point
+- "excerpt": a short verbatim snippet (1–2 phrases) from the transcript that led to this point
+
+Example: [{{"point": "Client has rented for 3 years with no written tenancy agreement.", "excerpt": "ive been there about three years and never had anything in writing"}}]
+
+Transcript: {payload.transcript}"""
+
+    try:
+        response = gemini_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+        )
+        raw = response.text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        data = json.loads(raw.strip())
+        return SummariseResponse(points=[
+            SummaryPoint(point=item["point"], excerpt=item.get("excerpt", ""))
+            for item in data if isinstance(item, dict) and "point" in item
+        ])
+    except Exception:
+        return SummariseResponse(points=[
+            SummaryPoint(point=payload.transcript.strip(), excerpt="")
+        ])
 
 
 @app.get("/api/notes/{chat_id}")

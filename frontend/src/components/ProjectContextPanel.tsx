@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Trash2, FileText, Globe, NotebookPen, Check, X, Loader, Download, Lightbulb, LightbulbOff } from 'lucide-react';
+import { Plus, Trash2, FileText, Globe, NotebookPen, Check, X, Loader, Download, Lightbulb, LightbulbOff, Mic, MicOff } from 'lucide-react';
 import { notesAPI } from '@/services/api';
 
 export type DepthMode = 'quick' | 'balanced' | 'deep';
@@ -30,6 +30,7 @@ interface Props {
   onAddSource: (title: string, url: string) => void;
   onDeleteSource: (id: string) => void;
   chatId?: string | null;
+  activeCaseId?: string | null;
   projectName?: string;
   conversationContext?: string;
   initialNotes?: string[];
@@ -44,6 +45,7 @@ export default function ProjectContextPanel({
   onAddSource,
   onDeleteSource,
   chatId,
+  activeCaseId,
   projectName = '',
   conversationContext = '',
   initialNotes = [],
@@ -60,6 +62,154 @@ export default function ProjectContextPanel({
   const [suggestionsEnabled, setSuggestionsEnabled] = useState(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── Speech recognition state ──────────────────────────────────────────────
+  const [isRecording, setIsRecording] = useState(false);
+  const [interimText, setInterimText] = useState('');
+  const [transcript, setTranscript] = useState('');
+  const [isSummarising, setIsSummarising] = useState(false);
+  const [speechError, setSpeechError] = useState<string | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recognitionRef = useRef<any>(null);
+  const isRecordingRef = useRef(false);
+  const transcriptRef = useRef('');
+
+  const toggleRecording = () => {
+    if (isRecordingRef.current) {
+      isRecordingRef.current = false;
+      recognitionRef.current?.stop();
+      recognitionRef.current = null;
+      setIsRecording(false);
+      setInterimText('');
+
+      const captured = transcriptRef.current;
+      transcriptRef.current = '';
+      // Keep transcript state visible (shows during summarising), cleared below
+
+      if (captured.trim()) {
+        console.log('[speech] captured transcript:', captured);
+        setIsSummarising(true);
+        notesAPI.summarise(captured)
+          .then((points) => {
+            console.log('[speech] summarise response:', points);
+            const updateNotes = (prev: string, newText: string) => {
+              const existing = prev.trimEnd();
+              return existing ? existing + '\n\n' + newText : newText;
+            };
+            const saveToSupabase = (noteContent: string) => {
+              if (!activeCaseId) {
+                console.warn('[speech] no activeCaseId — notes not saved to Supabase');
+                return;
+              }
+              const lines = noteContent.split('\n').map((l) => l.trim()).filter(Boolean);
+              console.log('[speech] saving to Supabase, caseId:', activeCaseId, 'lines:', lines);
+              notesAPI.save(activeCaseId, lines)
+                .then(() => console.log('[speech] notes saved to Supabase ✓'))
+                .catch((err) => console.error('[speech] Supabase save failed:', err));
+            };
+
+            if (points.length > 0) {
+              const bullets = points
+                .map((p) => `• ${p.point}${p.excerpt ? `\n  ↳ "${p.excerpt}"` : ''}`)
+                .join('\n\n');
+              console.log('[speech] writing to noteText:', bullets);
+              setNoteText((prev) => {
+                const next = updateNotes(prev, bullets);
+                saveToSupabase(next);
+                return next;
+              });
+            } else {
+              console.log('[speech] empty points — saving raw transcript');
+              setNoteText((prev) => {
+                const next = updateNotes(prev, captured);
+                saveToSupabase(next);
+                return next;
+              });
+            }
+          })
+          .catch((err) => {
+            console.error('[speech] summarise error:', err);
+            setSpeechError('Summary failed — transcript saved as-is.');
+            setNoteText((prev) => {
+              const existing = prev.trimEnd();
+              return existing ? existing + '\n' + captured : captured;
+            });
+          })
+          .finally(() => {
+            console.log('[speech] finally — clearing summarising state');
+            setIsSummarising(false);
+            setTranscript('');
+          });
+      } else {
+        console.log('[speech] captured was empty — nothing to summarise');
+        setTranscript('');
+      }
+      return;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognitionAPI) {
+      alert('Speech recognition is not supported in this browser. Try Chrome or Edge.');
+      return;
+    }
+
+    // Reset transcript state for new session
+    transcriptRef.current = '';
+    setTranscript('');
+    setInterimText('');
+    setSpeechError(null);
+
+    const recognition = new SpeechRecognitionAPI();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-GB';
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onresult = (event: any) => {
+      let interim = '';
+      let finalChunk = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const chunk = event.results[i][0].transcript;
+        if (event.results[i].isFinal) finalChunk += chunk;
+        else interim += chunk;
+      }
+      if (finalChunk) {
+        const appended = transcriptRef.current
+          ? transcriptRef.current + ' ' + finalChunk.trim()
+          : finalChunk.trim();
+        transcriptRef.current = appended;
+        setTranscript(appended);
+        setInterimText('');
+      } else {
+        setInterimText(interim);
+      }
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    recognition.onerror = (event: any) => {
+      const msg = event?.error ?? 'unknown error';
+      isRecordingRef.current = false;
+      recognitionRef.current = null;
+      setIsRecording(false);
+      setInterimText('');
+      setSpeechError(msg === 'not-allowed'
+        ? 'Microphone access denied — check browser permissions.'
+        : `Speech error: ${msg}`);
+    };
+
+    // Auto-restart on silence/timeout while still in recording mode
+    recognition.onend = () => {
+      if (isRecordingRef.current) {
+        try { recognition.start(); } catch { /* already restarting */ }
+      }
+    };
+
+    recognition.start();
+    recognitionRef.current = recognition;
+    isRecordingRef.current = true;
+    setIsRecording(true);
+  };
+
   const exportNotes = () => {
     const blob = new Blob([noteText], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -70,12 +220,32 @@ export default function ProjectContextPanel({
     URL.revokeObjectURL(url);
   };
 
-  // Reset when active case changes
+  // Reset when active case changes; also stop any active recording
   useEffect(() => {
+    if (isRecordingRef.current) {
+      isRecordingRef.current = false;
+      recognitionRef.current?.stop();
+      recognitionRef.current = null;
+      setIsRecording(false);
+      setInterimText('');
+    }
+    transcriptRef.current = '';
+    setTranscript('');
+    setInterimText('');
+    setIsSummarising(false);
+    setSpeechError(null);
     setNoteText(initialNotes.join('\n'));
     setSuggestions([]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isRecordingRef.current = false;
+      recognitionRef.current?.stop();
+    };
+  }, []);
 
   // Notify parent of note lines whenever text changes
   useEffect(() => {
@@ -287,21 +457,56 @@ export default function ProjectContextPanel({
             >
               {suggestionsEnabled ? <Lightbulb size={14} /> : <LightbulbOff size={14} />}
             </button>
+            <button
+              onClick={toggleRecording}
+              className={`transition relative ${isRecording ? 'text-red-400 hover:text-red-300' : 'text-gray-400 hover:text-gray-300'}`}
+              title={isRecording ? 'Stop voice transcription' : 'Start voice transcription'}
+            >
+              {isRecording ? <MicOff size={14} /> : <Mic size={14} />}
+              {isRecording && (
+                <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-red-400 rounded-full animate-pulse" />
+              )}
+            </button>
           </div>
         </div>
 
-        {/* Textarea — grows to fill all remaining space */}
-        <textarea
-          value={noteText}
-          onChange={(e) => {
-            setNoteText(e.target.value);
-            // Clear suggestions for lines that have been edited/removed
-            const currentLines = new Set(e.target.value.split('\n').map((l) => l.trim()).filter(Boolean));
-            setSuggestions((prev) => prev.filter((s) => currentLines.has(s.fragment)));
-          }}
-          placeholder={"Jot notes as you go...\n\ne.g.\n2 years\nchild\nno notice"}
-          className="flex-1 resize-none w-full px-4 py-2 text-xs text-gray-700 dark:text-gray-200 bg-transparent placeholder-gray-400 dark:placeholder-gray-500 outline-none font-mono leading-relaxed"
-        />
+        {/* Speech error banner */}
+        {speechError && (
+          <div className="shrink-0 border-t border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 px-4 py-2">
+            <p className="text-xs text-red-500">{speechError}</p>
+          </div>
+        )}
+
+        {/* During recording / summarising: live transcript fills the notes area */}
+        {(isRecording || isSummarising) ? (
+          <div className="flex-1 relative overflow-hidden">
+            <div className="h-full overflow-y-auto px-4 py-2">
+              <p className="text-xs text-gray-400 dark:text-gray-500 italic font-mono leading-relaxed whitespace-pre-wrap">
+                {transcript}
+                {interimText && <span className="opacity-50"> {interimText}</span>}
+              </p>
+            </div>
+            {isSummarising && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gray-50/80 dark:bg-gray-800/80">
+                <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                  <Loader size={12} className="animate-spin" />
+                  Generating summary…
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <textarea
+            value={noteText}
+            onChange={(e) => {
+              setNoteText(e.target.value);
+              const currentLines = new Set(e.target.value.split('\n').map((l) => l.trim()).filter(Boolean));
+              setSuggestions((prev) => prev.filter((s) => currentLines.has(s.fragment)));
+            }}
+            placeholder="Jot notes as you go…"
+            className="flex-1 resize-none w-full px-4 py-2 text-xs text-gray-700 dark:text-gray-200 bg-transparent placeholder-gray-400 dark:placeholder-gray-500 outline-none font-mono leading-relaxed"
+          />
+        )}
 
         {/* Suggestions strip */}
         {suggestions.length > 0 && (
