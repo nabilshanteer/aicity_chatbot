@@ -101,27 +101,47 @@ export const chatAPI = {
     sessionId: string,
     message: string,
     depth: string = 'standard',
+    onToken?: (token: string) => void,
   ): Promise<{ message: { content: string; sources?: string[] } }> => {
     try {
       const headers = await getAuthHeader();
-      const res = await fetch(`${API_BASE}/api/cases/${sessionId}/query`, {
+      const res = await fetch(`${API_BASE}/api/cases/${sessionId}/stream`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ query: message, depth }),
       });
-      
+
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         throw new Error(errorData.detail || `Backend error: ${res.statusText}`);
       }
-      
-      const data = await res.json();
-      return {
-        message: {
-          content: data.answer || 'No response from AI',
-          sources: data.sources || [],
-        },
-      };
+
+      const reader = res.body!.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = '';
+      let sources: string[] = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        for (const line of chunk.split('\n')) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const event = JSON.parse(line.slice(6));
+            if (event.type === 'token') {
+              fullContent += event.text;
+              onToken?.(event.text);
+            } else if (event.type === 'done') {
+              sources = event.sources || [];
+            } else if (event.type === 'error') {
+              throw new Error(event.text);
+            }
+          } catch (_) { /* skip malformed lines */ }
+        }
+      }
+
+      return { message: { content: fullContent || 'No response from AI', sources } };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       throw new Error(`Failed to send message: ${errorMessage}`);

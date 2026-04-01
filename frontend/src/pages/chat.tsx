@@ -245,41 +245,63 @@ export default function ChatPage() {
       });
     }
 
+    // Add empty assistant message to stream into
+    setMessagesByConv((prev) => ({
+      ...prev,
+      [activeConvId]: [...(prev[activeConvId] ?? []), { role: 'assistant', content: '' }],
+    }));
     setLoading(true);
+
     try {
       let caseId = conv?.caseId;
-      
-      // If no case ID, create one before sending message
+
       if (!caseId) {
-        console.log('Creating backend case for conversation...');
         const userId = session?.user?.id as string | undefined;
         const { case_id } = await chatAPI.createCase(userId);
         caseId = case_id;
-        
-        // Update conversation with the new case ID
         updateProject(activeProjectId, {
           conversations: activeProject!.conversations.map((c) =>
             c.id === activeConvId ? { ...c, caseId } : c,
           ),
         });
       }
-      
-      const response = await chatAPI.sendMessage(caseId, text, activeProject?.depth ?? 'balanced');
-      setMessagesByConv((prev) => ({
-        ...prev,
-        [activeConvId]: [
-          ...(prev[activeConvId] ?? []),
-          { role: 'assistant', content: response.message?.content ?? 'No response received.' },
-        ],
-      }));
+
+      await chatAPI.sendMessage(
+        caseId,
+        text,
+        activeProject?.depth ?? 'balanced',
+        (() => {
+          let buffer = '';
+          let timerId: ReturnType<typeof setTimeout> | null = null;
+          const convId = activeConvId;
+          return (token: string) => {
+            buffer += token;
+            if (timerId) return;
+            timerId = setTimeout(() => {
+              const chunk = buffer;
+              buffer = '';
+              timerId = null;
+              setMessagesByConv((prev) => {
+                const msgs = [...(prev[convId] ?? [])];
+                const last = msgs[msgs.length - 1];
+                if (last?.role === 'assistant') {
+                  msgs[msgs.length - 1] = { ...last, content: last.content + chunk };
+                }
+                return { ...prev, [convId]: msgs };
+              });
+            }, 50);
+          };
+        })(),
+      );
     } catch {
-      setMessagesByConv((prev) => ({
-        ...prev,
-        [activeConvId]: [
-          ...(prev[activeConvId] ?? []),
-          { role: 'assistant', content: 'Something went wrong. Please try again.' },
-        ],
-      }));
+      setMessagesByConv((prev) => {
+        const msgs = [...(prev[activeConvId] ?? [])];
+        const last = msgs[msgs.length - 1];
+        if (last?.role === 'assistant') {
+          msgs[msgs.length - 1] = { ...last, content: 'Something went wrong. Please try again.' };
+        }
+        return { ...prev, [activeConvId]: msgs };
+      });
     } finally {
       setLoading(false);
     }
@@ -393,7 +415,7 @@ export default function ChatPage() {
                   {/* Chat window — flex-1 so it fills all space freed by the panel */}
                   <ChatWindow
                     messages={activeMessages}
-                    loading={loading}
+                    loading={loading && activeMessages[activeMessages.length - 1]?.content === ''}
                   />
 
                   {/* Bottom dock — always pinned to bottom */}
