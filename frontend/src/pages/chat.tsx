@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { useSession } from 'next-auth/react';
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuthSafe } from '@/hooks/useAuthSafe';
-import { chatAPI, notesAPI } from '@/services/api';
+import { chatAPI } from '@/services/api';
 import ProjectSidebar, { Project } from '@/components/ProjectSidebar';
 import ProjectContextPanel, { CaseDocument, WebSource, DepthMode } from '@/components/ProjectContextPanel';
 import ConversationList, { Conversation } from '@/components/ConversationList';
@@ -24,23 +24,6 @@ interface ProjectData {
 
 type ProjectStore = Record<string, ProjectData>;
 
-// ── Stub data ──────────────────────────────────────────────────────────────
-const STUB_PROJECTS: ProjectStore = {
-  'p1': {
-    id: 'p1', name: 'Case 1 — Housing Benefit', depth: 'balanced',
-    documents: [{ id: 'd1', name: 'Housing Act 1996.pdf' }],
-    sources: [{ id: 's1', title: 'GOV.UK Housing Benefit', url: 'https://www.gov.uk/housing-benefit' }],
-    conversations: [{ id: 'c1', title: 'Eligibility query', caseId: undefined }],
-    notes: [],
-  },
-  'p2': {
-    id: 'p2', name: 'Case 2 — Universal Credit', depth: 'quick',
-    documents: [],
-    sources: [],
-    conversations: [],
-    notes: [],
-  },
-};
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const newId = () => `${Date.now()}`;
@@ -52,14 +35,13 @@ export default function ChatPage() {
   const { data: session } = useSession();
   const router = useRouter();
 
-  const [projects, setProjects] = useState<ProjectStore>(STUB_PROJECTS);
-  const [projectList, setProjectList] = useState<Project[]>(
-    Object.values(STUB_PROJECTS).map(({ id, name }) => ({ id, name })),
-  );
-  const [activeProjectId, setActiveProjectId] = useState<string | null>('p1');
+  const [projects, setProjects] = useState<ProjectStore>({});
+  const [projectList, setProjectList] = useState<Project[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [messagesByConv, setMessagesByConv] = useState<Record<string, Message[]>>({});
   const [loading, setLoading] = useState(false);
+  const [casesLoading, setCasesLoading] = useState(false);
   const [inputVisible, setInputVisible] = useState(true);
   const [panelOpen, setPanelOpen] = useState(true);
 
@@ -67,39 +49,76 @@ export default function ChatPage() {
     if (!isLoggedIn) router.push('/login');
   }, [isLoggedIn, router]);
 
+  // Load all cases for this user from Supabase on login
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    setCasesLoading(true);
+    chatAPI.getCases()
+      .then(({ cases }) => {
+        const store: ProjectStore = {};
+        const list: Project[] = [];
+        cases.forEach((c) => {
+          const name = c.title || 'Untitled Case';
+          const conv: Conversation = { id: c.id, title: name, caseId: c.id };
+          store[c.id] = {
+            id: c.id, name, depth: 'balanced',
+            documents: [], sources: [],
+            conversations: [conv],
+            notes: Array.isArray(c.notes) ? c.notes : [],
+          };
+          list.push({ id: c.id, name });
+        });
+        setProjects(store);
+        setProjectList(list);
+      })
+      .catch(() => { /* stay empty on error */ })
+      .finally(() => setCasesLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoggedIn]);
+
+  // Load messages when a case is opened (only once per session)
+  useEffect(() => {
+    if (!activeProjectId || messagesByConv[activeProjectId] !== undefined) return;
+    chatAPI.getMessages(activeProjectId)
+      .then(({ messages }) => {
+        setMessagesByConv((prev) => ({
+          ...prev,
+          [activeProjectId]: messages.map((m) => ({
+            role: (m.role === 'advisor' ? 'user' : 'assistant') as 'user' | 'assistant',
+            content: m.content,
+          })),
+        }));
+      })
+      .catch(() => {
+        setMessagesByConv((prev) => ({ ...prev, [activeProjectId]: [] }));
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeProjectId]);
 
   const activeProject = activeProjectId ? projects[activeProjectId] : null;
   const activeMessages: Message[] = messagesByConv[activeConvId ?? ''] ?? [];
 
-  // The real Supabase case UUID for the active conversation
-  const activeCaseId = activeProject?.conversations.find(
-    (c) => c.id === activeConvId,
-  )?.caseId ?? null;
-
-  // Load notes from Supabase whenever the active case changes
-  useEffect(() => {
-    if (!activeCaseId) return;
-    notesAPI.get(activeCaseId)
-      .then(({ notes }) => {
-        if (notes.length > 0 && activeProjectId) {
-          updateProject(activeProjectId, { notes });
-        }
-      })
-      .catch(() => { /* notes simply stay empty on error */ });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCaseId]);
+  // project.id === caseId in the persisted model
+  const activeCaseId = activeProjectId;
 
   // ── Project actions ──────────────────────────────────────────────────────
-  const handleNewProject = (name: string) => {
-    const id = newId();
-    const newProject: ProjectData = {
-      id, name, depth: 'balanced',
-      documents: [], sources: [], conversations: [], notes: [],
-    };
-    setProjects((p) => ({ ...p, [id]: newProject }));
-    setProjectList((p) => [{ id, name }, ...p]);
-    setActiveProjectId(id);
-    setActiveConvId(null);
+  const handleNewProject = async (name: string) => {
+    try {
+      const { case_id } = await chatAPI.createCase();
+      await chatAPI.updateTitle(case_id, name);
+      const conv: Conversation = { id: case_id, title: name, caseId: case_id };
+      const newProject: ProjectData = {
+        id: case_id, name, depth: 'balanced',
+        documents: [], sources: [], conversations: [conv], notes: [],
+      };
+      setProjects((p) => ({ ...p, [case_id]: newProject }));
+      setProjectList((p) => [{ id: case_id, name }, ...p]);
+      setMessagesByConv((prev) => ({ ...prev, [case_id]: [] }));
+      setActiveProjectId(case_id);
+      setActiveConvId(case_id);
+    } catch (err) {
+      console.error('Failed to create case:', err);
+    }
   };
 
   const handleDeleteProject = (id: string) => {
@@ -203,17 +222,26 @@ export default function ChatPage() {
       [activeConvId]: [...(prev[activeConvId] ?? []), userMsg],
     }));
 
-    // Auto-title the conversation from first message using Claude
+    // Auto-title from first message if the case still has the user-chosen creation name
     const conv = activeProject?.conversations.find((c) => c.id === activeConvId);
-    if (conv?.title === 'New Conversation') {
+    const isFirstMessage = (messagesByConv[activeConvId] ?? []).length === 0;
+    if (isFirstMessage) {
       const pid = activeProjectId;
-      const cid = activeConvId;
       chatAPI.generateTitle(text).then((title) => {
-        updateProject(pid, {
-          conversations: projects[pid]?.conversations.map((c) =>
-            c.id === cid ? { ...c, title } : c,
-          ) ?? [],
-        });
+        // Update in-memory project name + conversation title
+        setProjects((p) => ({
+          ...p,
+          [pid]: {
+            ...p[pid],
+            name: title,
+            conversations: p[pid]?.conversations.map((c) =>
+              c.id === pid ? { ...c, title } : c,
+            ) ?? [],
+          },
+        }));
+        setProjectList((pl) => pl.map((x) => x.id === pid ? { ...x, name: title } : x));
+        // Persist to Supabase
+        chatAPI.updateTitle(pid, title);
       });
     }
 
@@ -266,18 +294,28 @@ export default function ChatPage() {
       <ProjectSidebar
         projects={projectList}
         activeProjectId={activeProjectId}
-        onSelectProject={(id) => { setActiveProjectId(id); setActiveConvId(null); }}
+        onSelectProject={(id) => {
+          setActiveProjectId(id);
+          // Auto-open the single conversation for this case
+          const conv = projects[id]?.conversations[0];
+          setActiveConvId(conv?.id ?? null);
+        }}
         onNewProject={handleNewProject}
         onDeleteProject={handleDeleteProject}
         onRenameProject={handleRenameProject}
       />
 
       {!activeProject ? (
-        /* No project selected */
         <div className="flex-1 flex items-center justify-center text-center">
           <div>
-            <p className="text-gray-400 text-lg font-medium">Select a case to get started</p>
-            <p className="text-gray-300 text-sm mt-1">or create a new one from the sidebar</p>
+            {casesLoading ? (
+              <p className="text-gray-400 text-lg font-medium">Loading cases…</p>
+            ) : (
+              <>
+                <p className="text-gray-400 text-lg font-medium">Select a case to get started</p>
+                <p className="text-gray-300 text-sm mt-1">or create a new one from the sidebar</p>
+              </>
+            )}
           </div>
         </div>
       ) : (

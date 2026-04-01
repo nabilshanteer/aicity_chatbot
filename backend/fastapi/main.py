@@ -1,6 +1,6 @@
 import json
 import uuid
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 import os
 from dotenv import load_dotenv
@@ -92,6 +92,10 @@ class SummariseResponse(BaseModel):
 
 class SaveNotesRequest(BaseModel):
     notes: list[str]
+
+
+class TitleUpdateRequest(BaseModel):
+    title: str
 
 
 class SyncUserRequest(BaseModel):
@@ -202,16 +206,83 @@ Recent Conversation:
 # Cases / chat endpoints
 # ---------------------------------------------------------------------------
 
-@app.post("/api/cases/start")
-async def start_case():
+@app.get("/api/cases")
+async def list_cases(request: Request):
+    user_email = request.headers.get("X-User-ID")
+    if not user_email:
+        raise HTTPException(status_code=401, detail="Missing X-User-ID header")
+    user_res = supabase.table("users").select("id").eq("email", user_email).execute()
+    if not user_res.data:
+        return {"cases": []}
+    user_id = user_res.data[0]["id"]
+    res = (
+        supabase.table("cases")
+        .select("id, title, notes, created_at")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    cases = []
+    for row in (res.data or []):
+        notes_raw = row.get("notes")
+        cases.append({
+            "id": row["id"],
+            "title": row.get("title"),
+            "notes": json.loads(notes_raw) if notes_raw else [],
+            "created_at": row.get("created_at"),
+        })
+    return {"cases": cases}
+
+
+@app.get("/api/cases/{case_id}/messages")
+async def get_messages(case_id: str):
+    res = (
+        supabase.table("messages")
+        .select("role, content")
+        .eq("case_id", case_id)
+        .order("created_at", desc=False)
+        .execute()
+    )
+    return {"messages": res.data or []}
+
+
+@app.put("/api/cases/{case_id}/title")
+async def update_case_title(case_id: str, payload: TitleUpdateRequest):
     try:
-        response = supabase.table("cases").insert({}).execute()
-        if response.data and len(response.data) > 0:
-            return {"case_id": response.data[0]["id"]}
-        raise HTTPException(status_code=500, detail="Supabase inserted the row but returned no data.")
+        supabase.table("cases").update({"title": payload.title}).eq("id", case_id).execute()
     except Exception as e:
-        print(f"Supabase Error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        if "PGRST204" in str(e) or "title" in str(e):
+            pass  # column not yet added — silently skip
+        else:
+            raise HTTPException(status_code=500, detail=str(e))
+    return {"ok": True}
+
+
+@app.post("/api/cases/start")
+async def start_case(request: Request):
+    user_email = request.headers.get("X-User-ID")
+    user_id = None
+    if user_email:
+        try:
+            user_res = supabase.table("users").select("id").eq("email", user_email).execute()
+            if user_res.data:
+                user_id = user_res.data[0]["id"]
+        except Exception:
+            pass
+
+    # Try inserting with user_id; if the column doesn't exist yet, fall back to empty row
+    for row in ([{"user_id": user_id}] if user_id else [{}]) + [{}]:
+        try:
+            response = supabase.table("cases").insert(row).execute()
+            if response.data and len(response.data) > 0:
+                return {"case_id": response.data[0]["id"]}
+        except Exception as e:
+            err_str = str(e)
+            if "PGRST204" in err_str or "user_id" in err_str or "title" in err_str:
+                continue  # column missing — retry without it
+            print(f"Supabase Error: {e}")
+            raise HTTPException(status_code=500, detail=err_str)
+    raise HTTPException(status_code=500, detail="Failed to create case in Supabase.")
 
 
 @app.post("/api/cases/{case_id}/query")

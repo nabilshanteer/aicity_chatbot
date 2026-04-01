@@ -54,6 +54,29 @@ export const chatAPI = {
     }
   },
 
+  getCases: async (): Promise<{ cases: Array<{ id: string; title: string | null; notes: string | null; created_at: string }> }> => {
+    const headers = await getAuthHeader();
+    const res = await fetch(`${API_BASE}/api/cases`, { headers });
+    if (!res.ok) return { cases: [] };
+    return res.json();
+  },
+
+  getMessages: async (caseId: string): Promise<{ messages: Array<{ role: string; content: string }> }> => {
+    const headers = await getAuthHeader();
+    const res = await fetch(`${API_BASE}/api/cases/${caseId}/messages`, { headers });
+    if (!res.ok) return { messages: [] };
+    return res.json();
+  },
+
+  updateTitle: async (caseId: string, title: string): Promise<void> => {
+    const headers = await getAuthHeader();
+    await fetch(`${API_BASE}/api/cases/${caseId}/title`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ title }),
+    });
+  },
+
   getSessions: async (): Promise<{ sessions: string[] }> => {
     return { sessions: [] };
   },
