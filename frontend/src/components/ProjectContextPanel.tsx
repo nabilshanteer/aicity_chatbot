@@ -30,6 +30,7 @@ interface Props {
   onAddSource: (title: string, url: string) => void;
   onDeleteSource: (id: string) => void;
   chatId?: string | null;
+  activeCaseId?: string | null;
   projectName?: string;
   conversationContext?: string;
   initialNotes?: string[];
@@ -44,6 +45,7 @@ export default function ProjectContextPanel({
   onAddSource,
   onDeleteSource,
   chatId,
+  activeCaseId,
   projectName = '',
   conversationContext = '',
   initialNotes = [],
@@ -84,27 +86,48 @@ export default function ProjectContextPanel({
       // Keep transcript state visible (shows during summarising), cleared below
 
       if (captured.trim()) {
+        console.log('[speech] captured transcript:', captured);
         setIsSummarising(true);
         notesAPI.summarise(captured)
           .then((points) => {
+            console.log('[speech] summarise response:', points);
+            const updateNotes = (prev: string, newText: string) => {
+              const existing = prev.trimEnd();
+              return existing ? existing + '\n\n' + newText : newText;
+            };
+            const saveToSupabase = (noteContent: string) => {
+              if (!activeCaseId) {
+                console.warn('[speech] no activeCaseId — notes not saved to Supabase');
+                return;
+              }
+              const lines = noteContent.split('\n').map((l) => l.trim()).filter(Boolean);
+              console.log('[speech] saving to Supabase, caseId:', activeCaseId, 'lines:', lines);
+              notesAPI.save(activeCaseId, lines)
+                .then(() => console.log('[speech] notes saved to Supabase ✓'))
+                .catch((err) => console.error('[speech] Supabase save failed:', err));
+            };
+
             if (points.length > 0) {
+              const bullets = points
+                .map((p) => `• ${p.point}${p.excerpt ? `\n  ↳ "${p.excerpt}"` : ''}`)
+                .join('\n\n');
+              console.log('[speech] writing to noteText:', bullets);
               setNoteText((prev) => {
-                const existing = prev.trimEnd();
-                const bullets = points
-                  .map((p) => `• ${p.point}${p.excerpt ? `\n  ↳ "${p.excerpt}"` : ''}`)
-                  .join('\n\n');
-                return existing ? existing + '\n\n' + bullets : bullets;
+                const next = updateNotes(prev, bullets);
+                saveToSupabase(next);
+                return next;
               });
             } else {
-              // Summarise returned nothing — fall back to raw transcript
+              console.log('[speech] empty points — saving raw transcript');
               setNoteText((prev) => {
-                const existing = prev.trimEnd();
-                return existing ? existing + '\n' + captured : captured;
+                const next = updateNotes(prev, captured);
+                saveToSupabase(next);
+                return next;
               });
             }
           })
-          .catch(() => {
-            // API error — fall back to raw transcript and surface the error
+          .catch((err) => {
+            console.error('[speech] summarise error:', err);
             setSpeechError('Summary failed — transcript saved as-is.');
             setNoteText((prev) => {
               const existing = prev.trimEnd();
@@ -112,10 +135,12 @@ export default function ProjectContextPanel({
             });
           })
           .finally(() => {
+            console.log('[speech] finally — clearing summarising state');
             setIsSummarising(false);
             setTranscript('');
           });
       } else {
+        console.log('[speech] captured was empty — nothing to summarise');
         setTranscript('');
       }
       return;

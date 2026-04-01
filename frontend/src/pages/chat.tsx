@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { useSession } from 'next-auth/react';
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuthSafe } from '@/hooks/useAuthSafe';
-import { chatAPI } from '@/services/api';
+import { chatAPI, notesAPI } from '@/services/api';
 import ProjectSidebar, { Project } from '@/components/ProjectSidebar';
 import ProjectContextPanel, { CaseDocument, WebSource, DepthMode } from '@/components/ProjectContextPanel';
 import ConversationList, { Conversation } from '@/components/ConversationList';
@@ -70,6 +70,24 @@ export default function ChatPage() {
 
   const activeProject = activeProjectId ? projects[activeProjectId] : null;
   const activeMessages: Message[] = messagesByConv[activeConvId ?? ''] ?? [];
+
+  // The real Supabase case UUID for the active conversation
+  const activeCaseId = activeProject?.conversations.find(
+    (c) => c.id === activeConvId,
+  )?.caseId ?? null;
+
+  // Load notes from Supabase whenever the active case changes
+  useEffect(() => {
+    if (!activeCaseId) return;
+    notesAPI.get(activeCaseId)
+      .then(({ notes }) => {
+        if (notes.length > 0 && activeProjectId) {
+          updateProject(activeProjectId, { notes });
+        }
+      })
+      .catch(() => { /* notes simply stay empty on error */ });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCaseId]);
 
   // ── Project actions ──────────────────────────────────────────────────────
   const handleNewProject = (name: string) => {
@@ -274,6 +292,7 @@ export default function ChatPage() {
               onAddSource={handleAddSource}
               onDeleteSource={handleDeleteSource}
               chatId={activeProjectId}
+              activeCaseId={activeCaseId}
               projectName={activeProject.name}
               conversationContext={activeMessages.slice(-6).map((m) => `${m.role}: ${m.content}`).join(' ')}
               initialNotes={activeProject.notes}

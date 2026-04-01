@@ -131,7 +131,7 @@ def retrieve_chunks(query: str, top_k: int = 5) -> list[dict]:
     return result.data or []
 
 
-def generate_ai_response(user_query, retrieved_chunks, history, case_summary=None):
+def generate_ai_response(user_query, retrieved_chunks, history, case_summary=None, case_notes=None):
     context = "\n\n".join([
         f"[Source: {doc.get('source_url', 'Unknown')}]\n{doc['text']}"
         for doc in retrieved_chunks
@@ -144,13 +144,17 @@ def generate_ai_response(user_query, retrieved_chunks, history, case_summary=Non
         history_str += f"{speaker}: {entry['content']}\n"
 
     summary_context = f"\n[Case Summary]\n{case_summary}\n" if case_summary else ""
+    notes_context = (
+        "\n[Caseworker Notes]\n" + "\n".join(f"- {n}" for n in case_notes) + "\n"
+        if case_notes else ""
+    )
 
     prompt = f"""You are a professional advisor for Citizens Advice. Use the provided context and conversation history to answer the user's question accurately and helpfully.
 
 IMPORTANT: Always cite your sources from the provided context. When referencing information, include the source URL in square brackets like this: [Source: URL]
 
 If you don't have relevant information in the context, say so explicitly.
-{summary_context}
+{summary_context}{notes_context}
 History:
 {history_str}
 
@@ -216,10 +220,12 @@ async def ask_question(case_id: str, request: QueryRequest):
         print(f"[QUERY] Received query for case_id: {case_id}")
         print(f"[QUERY] Question: {request.query}")
 
-        case_res = supabase.table("cases").select("id", "summary").eq("id", case_id).execute()
+        case_res = supabase.table("cases").select("id", "summary", "notes").eq("id", case_id).execute()
         if not case_res.data:
             raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found in database.")
         case_summary = case_res.data[0].get("summary")
+        notes_raw = case_res.data[0].get("notes")
+        case_notes = json.loads(notes_raw) if notes_raw else []
 
         print(f"[QUERY] Encoding question for vector search...")
         retrieved = retrieve_chunks(request.query)
@@ -237,7 +243,7 @@ async def ask_question(case_id: str, request: QueryRequest):
         print(f"[QUERY] Retrieved {len(history)} messages from history")
 
         print(f"[QUERY] Generating response with Gemini...")
-        answer, sources = generate_ai_response(request.query, retrieved, history, case_summary)
+        answer, sources = generate_ai_response(request.query, retrieved, history, case_summary, case_notes)
         print(f"[QUERY] Generated response successfully")
 
         supabase.table("messages").insert({
