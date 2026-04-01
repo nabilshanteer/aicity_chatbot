@@ -81,6 +81,22 @@ export const chatAPI = {
     return { sessions: [] };
   },
 
+  getSources: async (caseId: string): Promise<{ sources: Array<{ id: string; title: string; url: string }> }> => {
+    const headers = await getAuthHeader();
+    const res = await fetch(`${API_BASE}/api/sources/${caseId}`, { headers });
+    if (!res.ok) return { sources: [] };
+    return res.json();
+  },
+
+  saveSources: async (caseId: string, sources: Array<{ id: string; title: string; url: string }>): Promise<void> => {
+    const headers = await getAuthHeader();
+    await fetch(`${API_BASE}/api/sources/${caseId}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ sources }),
+    });
+  },
+
   generateTitle: async (message: string): Promise<string> => {
     try {
       const headers = await getAuthHeader();

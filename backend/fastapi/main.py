@@ -142,6 +142,10 @@ class SaveNotesRequest(BaseModel):
     notes: list[str]
 
 
+class SaveSourcesRequest(BaseModel):
+    sources: list[dict]
+
+
 class TitleUpdateRequest(BaseModel):
     title: str
 
@@ -557,7 +561,7 @@ async def list_cases(request: Request):
     user_id = user_res.data[0]["id"]
     res = (
         supabase.table("cases")
-        .select("id, title, notes, created_at")
+        .select("id, title, notes, sources, created_at")
         .eq("user_id", user_id)
         .order("created_at", desc=True)
         .execute()
@@ -566,10 +570,12 @@ async def list_cases(request: Request):
     cases = []
     for row in (res.data or []):
         notes_raw = row.get("notes")
+        sources_raw = row.get("sources")
         cases.append({
             "id": row["id"],
             "title": row.get("title"),
             "notes": json.loads(notes_raw) if notes_raw else [],
+            "sources": sources_raw if isinstance(sources_raw, list) else (json.loads(sources_raw) if sources_raw else []),
             "created_at": row.get("created_at"),
         })
     return {"cases": cases}
@@ -843,7 +849,8 @@ User Question: {request.query}"""
             new_summary = generate_case_summary(recent.data[::-1], case_summary)
             supabase.table("cases").update({"summary": new_summary}).eq("id", case_id).execute()
 
-        yield f"data: {json.dumps({'type': 'done', 'sources': list(set(sources)), 'retrieved_documents': len(retrieved)})}\n\n"
+        cited_sources = re.findall(r'\[Source:\s*(https?://[^\]]+)\]', full_answer)
+        yield f"data: {json.dumps({'type': 'done', 'sources': list(set(cited_sources)), 'retrieved_documents': len(retrieved)})}\n\n"
 
     return StreamingResponse(
         event_stream(),
@@ -992,6 +999,25 @@ def save_notes(chat_id: str, payload: SaveNotesRequest):
     if not res.data:
         raise HTTPException(status_code=404, detail="Case not found")
     supabase.table("cases").update({"notes": json.dumps(payload.notes)}).eq("id", chat_id).execute()
+    return {"ok": True}
+
+
+@app.get("/api/sources/{case_id}")
+def get_sources(case_id: str):
+    res = supabase.table("cases").select("sources").eq("id", case_id).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Case not found")
+    sources_raw = res.data[0].get("sources")
+    sources = sources_raw if isinstance(sources_raw, list) else (json.loads(sources_raw) if sources_raw else [])
+    return {"sources": sources}
+
+
+@app.put("/api/sources/{case_id}")
+def save_sources(case_id: str, payload: SaveSourcesRequest):
+    res = supabase.table("cases").select("id").eq("id", case_id).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Case not found")
+    supabase.table("cases").update({"sources": json.dumps(payload.sources)}).eq("id", case_id).execute()
     return {"ok": True}
 
 

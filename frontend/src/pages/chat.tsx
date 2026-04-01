@@ -62,7 +62,8 @@ export default function ChatPage() {
           const conv: Conversation = { id: c.id, title: name, caseId: c.id };
           store[c.id] = {
             id: c.id, name, depth: 'balanced',
-            documents: [], sources: [],
+            documents: [],
+            sources: Array.isArray(c.sources) ? c.sources : [],
             conversations: [conv],
             notes: Array.isArray(c.notes) ? c.notes : [],
           };
@@ -161,16 +162,16 @@ export default function ChatPage() {
   const handleAddSource = (title: string, url: string) => {
     if (!activeProjectId) return;
     const src: WebSource = { id: newId(), title, url };
-    updateProject(activeProjectId, {
-      sources: [...(activeProject?.sources ?? []), src],
-    });
+    const updated = [...(activeProject?.sources ?? []), src];
+    updateProject(activeProjectId, { sources: updated });
+    chatAPI.saveSources(activeProjectId, updated).catch(console.error);
   };
 
   const handleDeleteSource = (srcId: string) => {
     if (!activeProjectId) return;
-    updateProject(activeProjectId, {
-      sources: activeProject?.sources.filter((s) => s.id !== srcId) ?? [],
-    });
+    const updated = activeProject?.sources.filter((s) => s.id !== srcId) ?? [];
+    updateProject(activeProjectId, { sources: updated });
+    chatAPI.saveSources(activeProjectId, updated).catch(console.error);
   };
 
   // ── Conversation actions ─────────────────────────────────────────────────
@@ -304,9 +305,9 @@ export default function ChatPage() {
           .filter((url) => url !== 'Unknown' && !existingUrls.has(url))
           .map((url) => ({ id: newId(), title: new URL(url).hostname.replace('www.', ''), url }));
         if (newSources.length > 0) {
-          updateProject(activeProjectId, {
-            sources: [...(activeProject?.sources ?? []), ...newSources],
-          });
+          const updatedSources = [...(activeProject?.sources ?? []), ...newSources];
+          updateProject(activeProjectId, { sources: updatedSources });
+          chatAPI.saveSources(activeProjectId, updatedSources).catch(console.error);
         }
       }
     } catch {
