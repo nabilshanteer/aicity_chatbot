@@ -72,7 +72,7 @@ GOVUK_TAXON_PATHS = [
     "/entering-and-staying-uk",
 ]
 
-CA_DELAY    = 1.0   # 1s is polite enough for Citizens Advice
+CA_DELAY    = 0.3   # 0.3s — fast but still polite
 GOVUK_DELAY = 0.5
 
 HEADERS = {

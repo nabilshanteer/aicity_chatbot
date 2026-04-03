@@ -101,6 +101,8 @@ def section_parent_path(path: str) -> str:
 
 
 def attrs_contain_noise(element: Tag) -> bool:
+    if element.attrs is None:
+        return False
     values = []
 
     for key in ("id", "role", "aria-label"):
