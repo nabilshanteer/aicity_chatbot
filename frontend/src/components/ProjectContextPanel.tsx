@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Trash2, FileText, Globe, NotebookPen, Check, X, Loader, Download, Lightbulb, LightbulbOff, Mic, MicOff } from 'lucide-react';
+import { Plus, Trash2, FileText, Globe, NotebookPen, Loader, Download, Mic, MicOff } from 'lucide-react';
 import { notesAPI } from '@/services/api';
 
 export type DepthMode = 'quick' | 'balanced' | 'deep';
@@ -13,13 +13,6 @@ export interface WebSource {
   id: string;
   title: string;
   url: string;
-}
-
-interface Suggestion {
-  id: string;
-  fragment: string;
-  suggestion: string;
-  full: string;
 }
 
 interface Props {
@@ -47,7 +40,6 @@ export default function ProjectContextPanel({
   chatId,
   activeCaseId,
   projectName = '',
-  conversationContext = '',
   initialNotes = [],
   onNotesChange,
 }: Props) {
@@ -57,10 +49,6 @@ export default function ProjectContextPanel({
 
   // ── Smart Notes state ─────────────────────────────────────────────────────
   const [noteText, setNoteText] = useState(initialNotes.join('\n'));
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [suggesting, setSuggesting] = useState(false);
-  const [suggestionsEnabled, setSuggestionsEnabled] = useState(true);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Speech recognition state ──────────────────────────────────────────────
   const [isRecording, setIsRecording] = useState(false);
@@ -83,42 +71,31 @@ export default function ProjectContextPanel({
 
       const captured = transcriptRef.current;
       transcriptRef.current = '';
-      // Keep transcript state visible (shows during summarising), cleared below
 
       if (captured.trim()) {
-        console.log('[speech] captured transcript:', captured);
         setIsSummarising(true);
         notesAPI.summarise(captured)
           .then((points) => {
-            console.log('[speech] summarise response:', points);
             const updateNotes = (prev: string, newText: string) => {
               const existing = prev.trimEnd();
               return existing ? existing + '\n\n' + newText : newText;
             };
             const saveToSupabase = (noteContent: string) => {
-              if (!activeCaseId) {
-                console.warn('[speech] no activeCaseId — notes not saved to Supabase');
-                return;
-              }
+              if (!activeCaseId) return;
               const lines = noteContent.split('\n').map((l) => l.trim()).filter(Boolean);
-              console.log('[speech] saving to Supabase, caseId:', activeCaseId, 'lines:', lines);
-              notesAPI.save(activeCaseId, lines)
-                .then(() => console.log('[speech] notes saved to Supabase ✓'))
-                .catch((err) => console.error('[speech] Supabase save failed:', err));
+              notesAPI.save(activeCaseId, lines).catch(console.error);
             };
 
             if (points.length > 0) {
               const bullets = points
                 .map((p) => `• ${p.point}${p.excerpt ? `\n  ↳ "${p.excerpt}"` : ''}`)
                 .join('\n\n');
-              console.log('[speech] writing to noteText:', bullets);
               setNoteText((prev) => {
                 const next = updateNotes(prev, bullets);
                 saveToSupabase(next);
                 return next;
               });
             } else {
-              console.log('[speech] empty points — saving raw transcript');
               setNoteText((prev) => {
                 const next = updateNotes(prev, captured);
                 saveToSupabase(next);
@@ -135,12 +112,10 @@ export default function ProjectContextPanel({
             });
           })
           .finally(() => {
-            console.log('[speech] finally — clearing summarising state');
             setIsSummarising(false);
             setTranscript('');
           });
       } else {
-        console.log('[speech] captured was empty — nothing to summarise');
         setTranscript('');
       }
       return;
@@ -153,7 +128,6 @@ export default function ProjectContextPanel({
       return;
     }
 
-    // Reset transcript state for new session
     transcriptRef.current = '';
     setTranscript('');
     setInterimText('');
@@ -197,7 +171,6 @@ export default function ProjectContextPanel({
         : `Speech error: ${msg}`);
     };
 
-    // Auto-restart on silence/timeout while still in recording mode
     recognition.onend = () => {
       if (isRecordingRef.current) {
         try { recognition.start(); } catch { /* already restarting */ }
@@ -220,7 +193,7 @@ export default function ProjectContextPanel({
     URL.revokeObjectURL(url);
   };
 
-  // Reset when active case changes; also stop any active recording
+  // Reset when active case changes
   useEffect(() => {
     if (isRecordingRef.current) {
       isRecordingRef.current = false;
@@ -235,7 +208,6 @@ export default function ProjectContextPanel({
     setIsSummarising(false);
     setSpeechError(null);
     setNoteText(initialNotes.join('\n'));
-    setSuggestions([]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId]);
 
@@ -253,66 +225,6 @@ export default function ProjectContextPanel({
     onNotesChange?.(lines);
   }, [noteText, onNotesChange]);
 
-  // Debounce: 800ms after typing stops, send non-empty lines to Claude
-  useEffect(() => {
-    if (!suggestionsEnabled) return;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-
-    debounceRef.current = setTimeout(async () => {
-      const fragments = noteText.split('\n').map((l) => l.trim()).filter(Boolean);
-      if (fragments.length === 0) { setSuggestions([]); return; }
-
-      // Only re-suggest if there are lines not already suggested or confirmed
-      const alreadySuggested = new Set(suggestions.map((s) => s.fragment));
-      const newFragments = fragments.filter((f) => !alreadySuggested.has(f));
-      if (newFragments.length === 0) return;
-
-      setSuggesting(true);
-      try {
-        const context = [
-          projectName && `Case: ${projectName}`,
-          conversationContext && `Recent conversation: ${conversationContext}`,
-        ].filter(Boolean).join('. ');
-
-        const { suggestions: hits } = await notesAPI.suggest(newFragments, context);
-
-        setSuggestions((prev) => [
-          ...prev,
-          ...hits
-            .filter((h) => h.suggestion !== null)
-            .map((h) => ({
-              id: `${Date.now()}-${Math.random()}`,
-              fragment: h.fragment,
-              suggestion: h.suggestion!,
-              full: h.full,
-            })),
-        ]);
-      } catch {
-        // silently fail — notes still work without suggestions
-      } finally {
-        setSuggesting(false);
-      }
-    }, 800);
-
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [noteText, suggestionsEnabled]);
-
-  const confirmSuggestion = (s: Suggestion) => {
-    // Replace the fragment in the textarea with the full suggested text
-    setNoteText((prev) =>
-      prev
-        .split('\n')
-        .map((line) => (line.trim() === s.fragment ? s.full : line))
-        .join('\n')
-    );
-    setSuggestions((prev) => prev.filter((x) => x.id !== s.id));
-  };
-
-  const dismissSuggestion = (id: string) => {
-    setSuggestions((prev) => prev.filter((s) => s.id !== id));
-  };
-
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) onAddDocument(file);
@@ -327,7 +239,7 @@ export default function ProjectContextPanel({
   };
 
   return (
-    <div className="w-72 border-r border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 flex flex-col h-full shrink-0">
+    <div className="w-72 border-r border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 flex flex-col h-full shrink-0">
 
       {/* ── Scrollable top: Documents + Sources ── */}
       <div className="overflow-y-auto p-4 space-y-5" style={{ maxHeight: '45%' }}>
@@ -439,7 +351,6 @@ export default function ProjectContextPanel({
           <div className="flex items-center gap-2">
             <NotebookPen size={15} className="text-gray-500 dark:text-gray-400" />
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Smart Notes</h3>
-            {suggesting && <Loader size={12} className="animate-spin text-blue-400" />}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -449,13 +360,6 @@ export default function ProjectContextPanel({
               title="Export notes as .txt"
             >
               <Download size={14} />
-            </button>
-            <button
-              onClick={() => { setSuggestionsEnabled((v) => !v); setSuggestions([]); }}
-              className={`transition ${suggestionsEnabled ? 'text-blue-400 hover:text-blue-300' : 'text-gray-400 hover:text-gray-300'}`}
-              title={suggestionsEnabled ? 'Disable AI suggestions' : 'Enable AI suggestions'}
-            >
-              {suggestionsEnabled ? <Lightbulb size={14} /> : <LightbulbOff size={14} />}
             </button>
             <button
               onClick={toggleRecording}
@@ -498,42 +402,10 @@ export default function ProjectContextPanel({
         ) : (
           <textarea
             value={noteText}
-            onChange={(e) => {
-              setNoteText(e.target.value);
-              const currentLines = new Set(e.target.value.split('\n').map((l) => l.trim()).filter(Boolean));
-              setSuggestions((prev) => prev.filter((s) => currentLines.has(s.fragment)));
-            }}
+            onChange={(e) => setNoteText(e.target.value)}
             placeholder="Jot notes as you go…"
-            className="flex-1 resize-none w-full px-4 py-2 text-xs text-gray-700 dark:text-gray-200 bg-transparent placeholder-gray-400 dark:placeholder-gray-500 outline-none font-mono leading-relaxed"
+            className="flex-1 resize-none w-full px-4 py-2 text-xs text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800/50 placeholder-gray-400 dark:placeholder-gray-500 outline-none font-mono leading-relaxed border-t border-gray-200 dark:border-gray-700"
           />
-        )}
-
-        {/* Suggestions strip */}
-        {suggestions.length > 0 && (
-          <div className="shrink-0 border-t border-blue-100 dark:border-blue-900 bg-blue-50 dark:bg-blue-950 px-3 py-2 space-y-1.5 max-h-40 overflow-y-auto">
-            <p className="text-xs text-blue-400 font-medium mb-1">Grok suggestions</p>
-            {suggestions.map((s) => (
-              <div key={s.id} className="flex items-center gap-1.5 text-xs flex-wrap">
-                <span className="text-gray-600 dark:text-gray-300">{s.fragment}</span>
-                <span className="text-blue-500">[{s.suggestion}?</span>
-                <button
-                  onClick={() => confirmSuggestion(s)}
-                  className="text-green-500 hover:text-green-400 transition font-semibold"
-                  title="Yes"
-                >
-                  <Check size={13} />
-                </button>
-                <button
-                  onClick={() => dismissSuggestion(s.id)}
-                  className="text-red-400 hover:text-red-300 transition"
-                  title="No"
-                >
-                  <X size={13} />
-                </button>
-                <span className="text-blue-500">]</span>
-              </div>
-            ))}
-          </div>
         )}
       </div>
     </div>

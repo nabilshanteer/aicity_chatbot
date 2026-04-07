@@ -41,12 +41,15 @@ Usage:
 
     # Adjust batch size if running on limited memory
     python embedder.py --batch-size 64
+
+    # Resume from a specific chunk index
+    python embedder.py --start-from 40310
 """
 
 import json
 import os
 import argparse
-from datetime import timezone
+import time
 
 from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
@@ -70,12 +73,22 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 # Embedding + Upsert
 # ---------------------------------------------------------------------------
 
-def upsert_batch(supabase: Client, batch: list[dict]) -> None:
-    """Upserts a batch of chunk records into the Supabase chunks table."""
-    supabase.table("chunks").upsert(batch, on_conflict="chunk_id").execute()
+def upsert_batch(supabase: Client, batch: list[dict], retries: int = 5) -> None:
+    """Upserts a batch of chunk records into the Supabase chunks table with retries."""
+    for attempt in range(retries):
+        try:
+            supabase.table("chunks").upsert(batch, on_conflict="chunk_id").execute()
+            return
+        except Exception as e:
+            if attempt < retries - 1:
+                wait = 2 ** attempt
+                print(f"    Upsert failed ({e}), retrying in {wait}s...")
+                time.sleep(wait)
+            else:
+                raise
 
 
-def embed_and_upload(chunks: list[dict], batch_size: int) -> None:
+def embed_and_upload(chunks: list[dict], batch_size: int, start_from: int = 0) -> None:
     if not SUPABASE_URL or not SUPABASE_KEY:
         raise ValueError("Missing SUPABASE_URL or SUPABASE_KEY in .env")
 
@@ -85,9 +98,11 @@ def embed_and_upload(chunks: list[dict], batch_size: int) -> None:
     model = SentenceTransformer(MODEL_NAME)
 
     total = len(chunks)
-    print(f"Embedding and upserting {total} chunks in batches of {batch_size}...\n")
+    print(f"Embedding and upserting {total} chunks in batches of {batch_size}...")
+    if start_from > 0:
+        print(f"Resuming from chunk {start_from}\n")
 
-    for batch_start in range(0, total, batch_size):
+    for batch_start in range(start_from, total, batch_size):
         batch_chunks = chunks[batch_start: batch_start + batch_size]
 
         texts = [c["text"] for c in batch_chunks]
@@ -131,6 +146,8 @@ def main():
                         help=f"Chunks per batch (default: {BATCH_SIZE})")
     parser.add_argument("--category", type=str, default=None,
                         help="Only embed chunks matching this category (e.g. 'benefits')")
+    parser.add_argument("--start-from", type=int, default=0,
+                        help="Skip the first N chunks (resume from this index)")
     args = parser.parse_args()
 
     if not os.path.exists(args.input):
@@ -148,7 +165,7 @@ def main():
         print("No chunks to process.")
         return
 
-    embed_and_upload(chunks, args.batch_size)
+    embed_and_upload(chunks, args.batch_size, args.start_from)
 
 
 if __name__ == "__main__":

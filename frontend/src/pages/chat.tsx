@@ -414,7 +414,7 @@ export default function ChatPage() {
 
       <button
         onClick={() => setPanelOpen((prev) => !prev)}
-        className="shrink-0 self-stretch w-5 flex items-center justify-center bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 border-r border-gray-200 dark:border-gray-700 transition"
+        className="shrink-0 self-stretch w-5 flex items-center justify-center bg-white dark:bg-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition"
         title={panelOpen ? 'Hide panel' : 'Show panel'}
       >
         {panelOpen
@@ -494,7 +494,7 @@ export default function ChatPage() {
                 loading={loading && activeMessages[activeMessages.length - 1]?.content === ''}
               />
 
-              <div className="shrink-0 bg-white dark:bg-gray-700 border-t border-gray-100 dark:border-gray-600">
+              <div className="shrink-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800">
                 <div className="flex items-center justify-center py-1">
                   <button
                     onClick={() => setInputVisible((prev) => !prev)}
@@ -510,7 +510,7 @@ export default function ChatPage() {
                   }`}
                 >
                   <ChatInput onSend={handleSend} loading={loading} />
-                  <div className="pb-2 dark:bg-gray-700">
+                  <div className="pb-2 dark:bg-gray-900">
                     <DepthSlider
                       depth={activeProject.depth}
                       onChange={(depth) => updateProject(activeProjectId!, { depth })}

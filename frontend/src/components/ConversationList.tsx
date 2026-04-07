@@ -76,7 +76,7 @@ export default function ConversationList({
               <div
                 key={conv.id}
                 onClick={() => { if (editingId !== conv.id) onSelectConversation(conv.id); }}
-                className="group flex items-center gap-3 px-4 py-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:border-blue-300 dark:hover:border-blue-500 hover:shadow-sm cursor-pointer transition"
+                className="group flex items-center gap-3 px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl hover:border-blue-300 dark:hover:border-blue-500 hover:shadow-sm cursor-pointer transition"
               >
                 <MessageSquare size={16} className="text-gray-400 shrink-0" />
 
