@@ -54,7 +54,7 @@ export const chatAPI = {
     }
   },
 
-  getCases: async (): Promise<{ cases: Array<{ id: string; title: string | null; notes: string | null; created_at: string }> }> => {
+  getCases: async (): Promise<{ cases: Array<{ id: string; title: string | null; notes: string | null; sources: unknown; created_at: string }> }> => {
     const headers = await getAuthHeader();
     const res = await fetch(`${API_BASE}/api/cases`, { headers });
     if (!res.ok) return { cases: [] };

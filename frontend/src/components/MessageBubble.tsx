@@ -36,7 +36,7 @@ export default function MessageBubble({ role, content }: Props) {
       </div>
       <div className="flex-1 min-w-0">
         <ReactMarkdown
-          remarkPlugins={[remarkGfm]}
+          remarkPlugins={[remarkGfm as never]}
           components={{
             h1: ({ children }) => (
               <h1 className="text-lg font-bold text-gray-900 dark:text-gray-50 mt-4 mb-2 first:mt-0">{children}</h1>
