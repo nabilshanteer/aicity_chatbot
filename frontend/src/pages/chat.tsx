@@ -10,6 +10,7 @@ import DepthSlider from '@/components/DepthSlider';
 import ProjectContextPanel, {
   CaseDocument,
   DepthMode,
+  Region,
   WebSource,
 } from '@/components/ProjectContextPanel';
 import ProjectSidebar, { Project } from '@/components/ProjectSidebar';
@@ -22,6 +23,7 @@ interface ProjectData {
   documents: CaseDocument[];
   sources: WebSource[];
   depth: DepthMode;
+  region: Region;
   conversations: Conversation[];
   notes: string[];
 }
@@ -34,6 +36,7 @@ const EMPTY_PROJECT: ProjectData = {
   documents: [],
   sources: [],
   depth: 'balanced',
+  region: 'England',
   conversations: [],
   notes: [],
 };
@@ -76,6 +79,7 @@ export default function ChatPage() {
             id: c.id,
             name,
             depth: 'balanced',
+            region: 'England',
             documents: [],
             sources: Array.isArray(c.sources) ? c.sources : [],
             conversations: [conv],
@@ -138,6 +142,7 @@ export default function ChatPage() {
         id: case_id,
         name,
         depth: 'balanced',
+        region: 'England',
         documents: [],
         sources: [],
         conversations: [conv],
@@ -198,6 +203,11 @@ export default function ChatPage() {
   const handleNotesChange = (notes: string[]) => {
     if (!activeProjectId) return;
     updateProject(activeProjectId, { notes });
+  };
+
+  const handleRegionChange = (region: Region) => {
+    if (!activeProjectId) return;
+    updateProject(activeProjectId, { region });
   };
 
   const handleAddSource = (title: string, url: string) => {
@@ -317,6 +327,7 @@ export default function ChatPage() {
         activeProject.notes ?? [],
         activeProject.sources.map((source) => source.url) ?? [],
         activeProject.documents.map((document) => document.name) ?? [],
+        activeProject.region ?? 'England',
         (() => {
           let buffer = '';
           let timerId: ReturnType<typeof setTimeout> | null = null;
@@ -409,6 +420,8 @@ export default function ChatPage() {
           conversationContext={activeMessages.slice(-6).map((m) => `${m.role}: ${m.content}`).join(' ')}
           initialNotes={workspaceProject.notes}
           onNotesChange={handleNotesChange}
+          region={workspaceProject.region}
+          onRegionChange={handleRegionChange}
         />
       </div>
 

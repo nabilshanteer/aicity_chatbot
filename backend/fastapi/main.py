@@ -104,6 +104,7 @@ class QueryRequest(BaseModel):
     notes: list[str] = Field(default_factory=list)
     selected_sources: list[str] = Field(default_factory=list)
     selected_documents: list[str] = Field(default_factory=list)
+    region: str = "England"
 
 
 class TitleRequest(BaseModel):
@@ -320,12 +321,14 @@ def rewrite_search_query(
     history: list[dict],
     selected_sources: list[str],
     selected_documents: list[str],
+    region: str = "England",
 ) -> str:
     notes = unique_nonempty(notes, limit=12)
     selected_sources = unique_nonempty(selected_sources, limit=10)
     selected_documents = unique_nonempty(selected_documents, limit=10)
 
     context_bits = []
+    context_bits.append(f"Region: {region}")
     if notes:
         context_bits.append("Notes:\n" + "\n".join(f"- {note}" for note in notes))
     context_bits.append("Recent case messages:\n" + format_history_for_rewrite(history))
@@ -428,6 +431,7 @@ def generate_ai_response(
     case_summary: str | None = None,
     case_notes: list[str] | None = None,
     depth: str = "balanced",
+    region: str = "England",
 ):
     if not retrieved_chunks:
         return (
@@ -461,9 +465,16 @@ def generate_ai_response(
         if case_notes else ""
     )
 
+    region_instruction = (
+        f"IMPORTANT: This case is in {region}. Only apply laws, rights, and guidance relevant to {region}. "
+        f"If the context contains information specific to another region (e.g. Scotland-specific law when the case is in England), ignore it and focus on {region} law."
+    )
+
     depth_lower = depth.lower()
     if depth_lower == "deep":
-        system_prompt = """You are a senior Citizens Advice specialist with deep expertise in UK benefits, housing, employment, debt, and family law.
+        system_prompt = f"""You are a senior Citizens Advice specialist with deep expertise in UK benefits, housing, employment, debt, and family law.
+
+{region_instruction}
 
 Provide a comprehensive, highly accurate, and thoroughly researched response. Your answer should:
 - Cover all relevant legal rights, entitlements, and obligations
@@ -477,13 +488,17 @@ Structure your response with clear headings and bullet points where appropriate.
         max_tokens = 2048
         claude_model = "claude-sonnet-4-6"
     elif depth_lower == "quick":
-        system_prompt = """You are a Citizens Advice advisor. Give a brief, direct answer in 2-4 sentences maximum.
+        system_prompt = f"""You are a Citizens Advice advisor. Give a brief, direct answer in 2-4 sentences maximum.
+
+{region_instruction}
 
 Focus only on the most important point. Include one source URL if relevant: [Source: URL]. No lengthy explanations."""
         max_tokens = 256
         claude_model = "claude-haiku-4-5-20251001"
     else:
-        system_prompt = """You are a professional advisor for Citizens Advice. Use the provided context and conversation history to answer the user's question accurately and helpfully.
+        system_prompt = f"""You are a professional advisor for Citizens Advice. Use the provided context and conversation history to answer the user's question accurately and helpfully.
+
+{region_instruction}
 
 Always cite your sources from the provided context. When referencing information, include the source URL in square brackets like this: [Source: URL]
 
@@ -663,6 +678,7 @@ async def ask_question(case_id: str, request: QueryRequest):
             history,
             request.selected_sources,
             request.selected_documents,
+            request.region,
         )
         source_filters = unique_nonempty(request.selected_sources, limit=10)
         document_source_filters = resolve_document_filters(request.selected_documents)
@@ -692,6 +708,7 @@ async def ask_question(case_id: str, request: QueryRequest):
             case_summary,
             case_notes,
             request.depth,
+            request.region,
         )
 
         supabase.table("messages").insert({
@@ -784,9 +801,16 @@ async def stream_answer(case_id: str, request: QueryRequest):
         if case_notes else ""
     )
 
+    stream_region_instruction = (
+        f"IMPORTANT: This case is in {request.region}. Only apply laws, rights, and guidance relevant to {request.region}. "
+        f"If the context contains information specific to another region (e.g. Scotland-specific law when the case is in England), ignore it and focus on {request.region} law."
+    )
+
     depth_lower = request.depth.lower()
     if depth_lower == "deep":
-        system_prompt = """You are a senior Citizens Advice specialist with deep expertise in UK benefits, housing, employment, debt, and family law.
+        system_prompt = f"""You are a senior Citizens Advice specialist with deep expertise in UK benefits, housing, employment, debt, and family law.
+
+{stream_region_instruction}
 
 Provide a comprehensive, highly accurate, and thoroughly researched response. Your answer should:
 - Cover all relevant legal rights, entitlements, and obligations
@@ -800,13 +824,17 @@ Structure your response with clear headings and bullet points where appropriate.
         max_tokens = 2048
         llm_model = "claude-sonnet-4-6"
     elif depth_lower == "quick":
-        system_prompt = """You are a Citizens Advice advisor. Give a brief, direct answer in 2-4 sentences maximum.
+        system_prompt = f"""You are a Citizens Advice advisor. Give a brief, direct answer in 2-4 sentences maximum.
+
+{stream_region_instruction}
 
 Focus only on the most important point. Include one source URL if relevant: [Source: URL]. No lengthy explanations."""
         max_tokens = 256
         llm_model = "claude-haiku-4-5-20251001"
     else:
-        system_prompt = """You are a professional advisor for Citizens Advice. Use the provided context and conversation history to answer the user's question accurately and helpfully.
+        system_prompt = f"""You are a professional advisor for Citizens Advice. Use the provided context and conversation history to answer the user's question accurately and helpfully.
+
+{stream_region_instruction}
 
 Always cite your sources from the provided context. When referencing information, include the source URL in square brackets like this: [Source: URL]
 

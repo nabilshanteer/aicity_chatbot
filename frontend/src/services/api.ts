@@ -120,6 +120,7 @@ export const chatAPI = {
     notes: string[] = [],
     selectedSources: string[] = [],
     selectedDocuments: string[] = [],
+    region: string = 'England',
     onToken?: (token: string) => void,
   ): Promise<{ message: { content: string; sources?: string[] } }> => {
     try {
@@ -133,6 +134,7 @@ export const chatAPI = {
           notes,
           selected_sources: selectedSources,
           selected_documents: selectedDocuments,
+          region,
         }),
       });
 

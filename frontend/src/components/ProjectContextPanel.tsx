@@ -3,6 +3,7 @@ import { Plus, Trash2, FileText, Globe, NotebookPen, Loader, Download, Mic, MicO
 import { notesAPI } from '@/services/api';
 
 export type DepthMode = 'quick' | 'balanced' | 'deep';
+export type Region = 'England' | 'Wales' | 'Scotland' | 'Northern Ireland';
 
 export interface CaseDocument {
   id: string;
@@ -28,6 +29,8 @@ interface Props {
   conversationContext?: string;
   initialNotes?: string[];
   onNotesChange?: (notes: string[]) => void;
+  region?: Region;
+  onRegionChange?: (region: Region) => void;
 }
 
 export default function ProjectContextPanel({
@@ -42,6 +45,8 @@ export default function ProjectContextPanel({
   projectName = '',
   initialNotes = [],
   onNotesChange,
+  region = 'England',
+  onRegionChange,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sourceForm, setSourceForm] = useState({ title: '', url: '' });
@@ -243,6 +248,25 @@ export default function ProjectContextPanel({
 
       {/* ── Scrollable top: Documents + Sources ── */}
       <div className="overflow-y-auto p-4 space-y-5" style={{ maxHeight: '45%' }}>
+
+        {/* Region */}
+        <section>
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200">Region</h3>
+          </div>
+          <select
+            value={region}
+            onChange={(e) => onRegionChange?.(e.target.value as Region)}
+            className="w-full text-xs px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg outline-none focus:border-blue-500"
+          >
+            <option>England</option>
+            <option>Wales</option>
+            <option>Scotland</option>
+            <option>Northern Ireland</option>
+          </select>
+        </section>
+
+        <hr className="border-gray-200 dark:border-gray-700" />
 
         {/* Case Documents */}
         <section>

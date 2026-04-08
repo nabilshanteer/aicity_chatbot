@@ -1,5 +1,5 @@
 fastapi
-uvicorn
+uvicorn[standard]
 sentence-transformers
 python-dotenv
 supabase
@@ -7,3 +7,4 @@ requests
 numpy
 anthropic
 passlib[bcrypt]
+google-genai
